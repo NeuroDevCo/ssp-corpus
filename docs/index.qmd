@@ -1,0 +1,163 @@
+```{python}
+# | echo: false
+import numpy as np
+import sys
+
+sys.path.insert(1, "..")
+import src.design as design
+```
+
+
+## Creating the words
+
+Words should ideally follow these constraints:
+
+* Words must have CVCCV structure
+* Words must be non-words (or very low frequency words) in Catalan *and* Spanish (preferably, also in English, French, Italia, Romanian, Portuguese, and German).
+* The syllables included in the CV-CCV or CVC-CV versions of the word do not correspond to a high-frequency word in Catalan or Spanish
+* For infants, all phonemes in the word must be present in the Eastern Catalan *and* European Spanish phoneme inventories
+* For infants, the CV-CCV and CVC-CV forms of the words must be phonotactical in Catalan *and* Spanish. This is specially important for the CC consonant cluster.
+* Consonant clusters follow the Sonority Sequencing Principle (SSP): sonority (as measured by a Sonority Index) is higher in the first consonant of the cluster and lower in the second consonant.
+* Co-articulation cues should be kept at minimum. Each consonant in the consonant cluster should sound similary in both forms of the word, so that participants cannot relie on co-articulation cues to figure out the specific syllabification used when generating the audio file.
+
+
+We selected the **/kl/**, **/pl/**, and **/st/** consonant clusters for newborns. Since newborns are unfamiliar to the phonotactics of their native language(s), the fact that /st/ does not occur in Catalan or Spanish is not a concern). For infants, we selected the **/kl/** and **/pl/** consonant clusters.
+
+|                    | **Phonemes**                 |
+|--------------------|------------------------------|
+| Onsets             | /b/, /d/, /f/, /m/, /s/, /t/ |
+| Consonant clusters | /kl/, pl/                    |
+| Vowels             | /a/, /e/, /i/, /o/           |
+
+
+We then selected the onsets /b/, /d/, /f/, /m/, /s/, /t/ for the first syllable, and the vowels **/a/**, **/e/**, **/i/**, **/o/**. These four vowels are present in both Catalan *and* Spanish. The vowel /u/ was left out given its relatively low frequency compared to the others. We grouped the vowels into /a/-/o/ and /e/-/i/ pairs, so that each pair would appear in the same word, with the first vowel as the nucleus of the first syllable and the second vowel as the nucleus of the second syllable. These rationaly behind this grouping is avoiding unbalances in the relative frequency of the vowels included in the same word: if the first syllable has a higher frequency than the the vowel in the second syllable, it might be more salient to participants.
+
+Onsets, vowels, and consonant clusters were combined into CVCCV words in such way that:
+
+* Vowels do not repeat within the same word
+* Consonants do not repeat within the same word (i.e., the onset consonant does not occur also in the consonant cluster)
+* Both vowels belong to the same pair described above (/a/-/o/ or /e/-/i/)
+
+We created two lists of words. In each list, each combination of onset and vowel pair was matched wwith a different consonant cluster (/pl/ or /kl). In the case of onset and vowel pairs matched with /st/, onset and consonant cluster pairs were identical in both lists, but where matched with a different pair of vowels /a/-/o/ or /e/-/i/.
+
+| **List**   | **Syllabification** | **Words**                      |
+|------------|---------------------|--------------------------------|
+| List 1     | MOP+ (CV-CCV)       | MO-PLA, SA-KLO, TI-PLE, DE-KLI | 
+|            | MOP- (CVC-CV)       | MOP-LA, SAK-LO, TIP-LE, DEK-LI | 
+| List 2     | MOP+ (CV-CCV)       | MO-KLA, SA-PLO, TI-KLE, DE-PLI |
+|            | MOP- (CVC-CV)       | MOK-LA, SAP-LO, TIK-LE, DEP-LI |
+
+
+## Generating the audio files
+
+We used MBROLA [@dutoit1996mbrola] to generate the audio file of each word-form. Each phoneme was set at 100 ms duration. Segmentation pauses of 25 ms were added after the second phoneme (MOP+ words) or after the third phoneme (MOP- words). Pitch was kep constant at 200 Hz. We used the Italian female voice `it4` (see other MBROLA voices [here](https://github.com/numediart/MBROLA-voices)), since its diphone database includes all vowels, consonants, and consonant clusters in the stimuli. We deloped a Python module, pymbrola, as a front-end to MBROLA (see the [MBROLA GitHub repository](https://github.com/numediart/MBROLA)) via the [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install). After generating the audio files, we manually removed any prevoicing from the first consonant in the consonant cluster.
+
+## Creating the block design
+
+The blocks design for the present study is inspired by @mahmoudzadeh2013syllabic's. Each block consists of 5 trials. Each trial consists of four words. Therefore, 20 words are presented in each block.
+
+- **Words**: There are three types of words, corresponding to each of the three experimental conditions: standard words (ST), deviant words (DW), and deviant syllables (DS). ST words follow the MOP (e.g., "ti-ple"). Deviant words violate the MOP (e.g., "tip-le"). Deviant syllables are simply the first syllable of the ST word (e.g., "ti").
+- **Trials**: There are three types of trials (ST, DW, and DS). In ST trials, the four words are ST words. In DW trials, the first three words are ST words, and the last word is a DW word. In DS trials, the first three words are ST words and the last word is a DS word.
+- **Blocks*: There are three types of blocks (ST, DW, and DS). In ST blocks, all trials are ST trials. In DW trials, the first trial is a DW trial, and the remaining 4 trials are two DW trials and two ST trials in random order. In DS trials, the first trial is a DS trial, and the remaining 4 trials are two DS trials and two ST trials in random order.
+
+### Constraints
+
+- Two consecutive blocks are not from the same condition
+- Two consecutive blocks are not assigned to the same word
+- Two consecutive blocks are not assigned to the same word type
+- Every 8 blocks, each condition appears at list twice
+
+## Appendix 
+
+### Phoneme classes and sonority
+
+Following @parker2008sound, we can classify phonemes into the following levels of sonority, from higher to lower:
+
+- **Low vowels** include vowels with open articulation.
+- **Mid peripheral vowels** are typically mid-vowels like /e/ and /o/, but exclude central vowels like [H].
+- **High peripheral vowels** include /i/ and /u/, excluding central high vowels like [q].
+- **Interior vowels** ([H] and [q]) represent central vowels or lesser-known high vowels.
+- **Glides** are typically /j/ and /w/.
+- **Rhotic approximants** include the English /ɹ/.
+- **Flaps** and **trills** include variations of /r/, /ɾ/, and related sounds.
+- **Nasals**, **voiced fricatives**, **stops**, and **affricates** are based on the voicing and manner of articulation.
+
+
+
+| **Category**           | **Sonority Rank** | **IPA Symbols** | **Example Words**                                    |
+|------------------------|-------------------|-----------------|------------------------------------------------------|
+| Low vowels             | 17                | a               | Spanish: **casa** (house)                            |
+|                        |                   | ɑ               | English: **father**                                  |
+|                        |                   | æ               | English: **cat**                                     |
+| Mid peripheral vowels  | 16                | e               | Spanish: **cero** (zero)                             |
+|                        |                   | o               | Spanish: **hola** (hello)                            |
+|                        |                   | ɛ               | English: **bet**                                     |
+|                        |                   | ɔ               | English: **caught** (in some accents)                |
+| High peripheral vowels | 15                | i               | English: **machine**                                 |
+|                        |                   | u               | English: **boot**                                    |
+|                        |                   | ɪ               | English: **bit**                                     |
+|                        |                   | ʊ               | English: **foot**                                    |
+| Mid interior vowels    | 14                | ə               | English: **sofa**                                    |
+|                        |                   | ɘ               | Catalan: **vermell** (red) (Central Catalan dialect) |
+| High interior vowels   | 13                | ɨ               | Polish: **my** (we)                                  |
+|                        |                   | ʉ               | Swedish: **ful** (ugly)                              |
+| Glides                 | 12                | j               | English: **yes**                                     |
+|                        |                   | w               | English: **water**                                   |
+| Rhotic approximants    | 11                | ɹ               | English: **red**                                     |
+| Flaps                  | 10                | ɾ               | Spanish: **caro** (expensive)                        |
+|                        |                   | ɽ               | Hindi: **baɽa** (big)                                |
+| Laterals               | 9                 | l               | English: **love**                                    |
+|                        |                   | ɭ               | Malayalam: **paɭa** (palm tree)                      |
+|                        |                   | ʎ               | Catalan: **palla** (straw)                           |
+| Trills                 | 8                 | r               | Spanish: **perro** (dog)                             |
+|                        |                   | ʀ               | German: **Ehre** (honor)                             |
+| Nasals                 | 7                 | m               | English: **man**                                     |
+|                        |                   | n               | English: **no**                                      |
+|                        |                   | ɳ               | Tamil: **veɳɳil** (summer)                           |
+|                        |                   | ŋ               | English: **sing**                                    |
+|                        |                   | ɲ               | Spanish: **señor** (mister)                          |
+|                        |                   | ɴ               | Japanese: **pan** (bread)                            |
+| Voiced fricatives      | 6                 | v               | English: **van**                                     |
+|                        |                   | ð               | English: **this**                                    |
+|                        |                   | z               | English: **zoo**                                     |
+|                        |                   | ʒ               | English: **measure**                                 |
+|                        |                   | ʐ               | Polish: **żaba** (frog)                              |
+|                        |                   | ʝ               | Spanish: **hielo** (ice) (in some dialects)          |
+|                        |                   | ɣ               | Spanish: **agua** (water) (in some dialects)         |
+|                        |                   | ʁ               | French: **rouge** (red)                              |
+|                        |                   | ʕ               | Arabic: **ʕarab** (Arab)                             |
+|                        |                   | ɦ               | Czech: **hory** (mountains)                          |
+| Voiced affricates      | 5                 | dʒ              | English: **judge**                                   |
+|                        |                   | ɖʐ              | Kannada: **kaɖʐe** (shore)                           |
+|                        |                   | ɟʝ              | Hungarian: **gyümölcs** (fruit)                      |
+| Voiced stops           | 4                 | b               | English: **bat**                                     |
+|                        |                   | d               | English: **dog**                                     |
+|                        |                   | g               | English: **go**                                      |
+|                        |                   | ɖ               | Hindi: **baɖ** (big)                                 |
+|                        |                   | ɢ               | Inuktitut: **qiɢiq** (sharpen)                       |
+| Voiceless fricatives   | 3                 | f               | English: **fan**                                     |
+|                        |                   | θ               | English: **think**                                   |
+|                        |                   | s               | English: **see**                                     |
+|                        |                   | ʃ               | English: **shoe**                                    |
+|                        |                   | ʂ               | Polish: **szkoła** (school)                          |
+|                        |                   | ç               | German: **ich** (I)                                  |
+|                        |                   | x               | Spanish: **jamón** (ham) (in some dialects)          |
+|                        |                   | χ               | Arabic: **kha** (letter sound)                       |
+|                        |                   | ħ               | Maltese: **ħobż** (bread)                            |
+|                        |                   | h               | English: **hat**                                     |
+| Voiceless affricates   | 2                 | tʃ              | English: **chop**                                    |
+|                        |                   | ts              | Catalan: **tsunami**                                 |
+|                        |                   | tɕ              | Polish: **ciasto** (cake)                            |
+|                        |                   | ʈʂ              | Hindi: **ʈʂaʈʂa** (loud noise)                       |
+| Voiceless stops        | 1                 | p               | English: **pat**                                     |
+|                        |                   | t               | English: **top**                                     |
+|                        |                   | k               | English: **cat**                                     |
+|                        |                   | ʈ               | Hindi: **ʈamatar** (tomato)                          |
+|                        |                   | q               | Arabic: **qalam** (pen)                              |
+|                        |                   | ʡ               | Ubykh: **ʡa** (water)                                |
+|                        |                   | ʔ               | English: **uh-oh** (glottal stop between syllables)  |
+
+: Classification of phoneme classes by sonority, according to @parker2008sound.
+
+## References
+
