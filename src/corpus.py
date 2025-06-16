@@ -38,13 +38,13 @@ def process_corpus(path: str) -> pd.DataFrame:
         pd.DataFrame: _description_
     """
     corpora = [Path(root, d) for root, dirs, _ in walk(path) for d in dirs]
-    for corpus in corpora:
-        con.rule(f"Processing corpus [bold]{corpus.name}[/bold]")
+    con.rule(f"Processing language [bold]{path.name}[/bold]")
+    for corpus in track(corpora):
         datasets = find_datasets(corpus)
-        con.print(f"Found {len(datasets)} datasets")
+        con.print(f"Corpus {corpus.name} ({len(datasets)} datasets)")
         table = pd.DataFrame(columns=["corpus", "subdir", "dataset", "token", "count"])
         errors = []
-        for i, dataset in track(enumerate(datasets), "Computing frequencies..."):
+        for dataset in enumerate(datasets):
             tokens = []
             try:
                 data = pylangacq.read_chat(str(dataset))
@@ -53,15 +53,10 @@ def process_corpus(path: str) -> pd.DataFrame:
                 for word, count in Counter(tokens).items():
                     words.append(word)
                     counts.append(count)
-                data = {
-                    "corpus": corpus.name,
-                    "word": words,
-                    "count": counts,
-                }
+                data = {"corpus": corpus.name, "word": words, "count": counts}
                 table = pd.concat([table, pd.DataFrame(data)])
             except ValueError:
                 errors.append(dataset.name)
-            con.print(f"Completed [{i + 1]} / {len(corpora)})
     con.print(f"[red]Error reading {len(errors)} datasets: {errors}[/red]")
     table = table.groupby(["corpus", "token"]).sum()
     table = table.sort_values(by="count", ascending=False).reset_index(drop=True)
