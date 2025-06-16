@@ -1,0 +1,11 @@
+[project]
+name = "ssp-corpus"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "eng-to-ipa>=0.0.2",
+    "pandas>=2.3.0",
+    "pylangacq>=0.19.1",
+]
