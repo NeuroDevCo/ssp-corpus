@@ -1,25 +1,25 @@
-import pylangacq
+"""Preprocess CHILDES corpora."""
+
+from pathlib import Path
+import re
 from collections import Counter
 import pandas as pd
-import glob
+from rich.progress import track
+import pylangacq
 import eng_to_ipa as ipa
-import re
 
-# Path to the folder containing the .cha files
-folder_path = r"C:\Users\silvi\OneDrive\Desktop\Sant Joan de Déu\CORPUS ANALYSIS\Bates\Free20\\"
-cha_files = glob.glob(folder_path + "*.cha")
+path = Path("data", "CHILDES", "Bates", "Free20")
+files = list(path.glob("*.cha"))
 
 all_tokens = []
 errors = []
 
-# Read words from all participants
-for file in cha_files:
-    print(f"Processing: {file}")
+for file in track(files, description="Extracting words"):
     try:
-        data = pylangacq.read_chat(file)
-        tokens = data.words()  # all participants
+        data = pylangacq.read_chat(str(file))
+        tokens = data.words()
         all_tokens.extend(tokens)
-    except Exception as e:
+    except ValueError as e:
         print(f"Error reading file {file}: {e}")
         errors.append(file)
 
@@ -31,9 +31,11 @@ print(f"\nTotal unique tokens: {len(token_counts)}")
 tokens, freqs, phon_trans, syll1, syll2 = [], [], [], [], []
 no_transcription = []
 
+
 # Function to split phonetic transcription into syllables (very simplified)
 def split_syllables(phonetic):
     return re.split(r"(?<=[aeiouɑɛɪʊɔəæʌ])(?=[^aeiouɑɛɪʊɔəæʌ])", phonetic)
+
 
 # Build the table
 for token, freq in token_counts.items():
@@ -58,28 +60,32 @@ for token, freq in token_counts.items():
         syll2.append("")
 
 # Create DataFrame
-df = pd.DataFrame({
-    "Token": tokens,
-    "Frequency": freqs,
-    "Phon_Transcription": phon_trans,
-    "First_Syllable": syll1,
-    "Second_Syllable": syll2
-})
+df = pd.DataFrame(
+    {
+        "Token": tokens,
+        "Frequency": freqs,
+        "Phon_Transcription": phon_trans,
+        "First_Syllable": syll1,
+        "Second_Syllable": syll2,
+    }
+)
 
 # Sort by frequency
 df = df.sort_values(by="Frequency", ascending=False).reset_index(drop=True)
 
-# Save complete table to Excel 
+# Save complete table to Excel
 excel_name = "ALL_tokens_phon_FULL.xlsx"
-df.to_excel(excel_name, index=False)  
+df.to_excel(excel_name, index=False)
 
 # Save tokens without transcription separately
 missing_path = "tokens_without_transcription.csv"
-pd.DataFrame({"Token": no_transcription}).to_csv(missing_path, index=False, encoding="utf-8-sig")
+pd.DataFrame({"Token": no_transcription}).to_csv(
+    missing_path, index=False, encoding="utf-8-sig"
+)
 
 # Print summary
 print("\nProcessing complete.")
 print(df.head(10))
-print(f"\nTotal files processed: {len(cha_files)}")
+print(f"\nTotal files processed: {len(files)}")
 print(f"Files skipped due to errors: {len(errors)}")
 print(f"Words without transcription: {len(no_transcription)}")

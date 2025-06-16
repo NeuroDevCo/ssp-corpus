@@ -8,4 +8,5 @@ dependencies = [
     "eng-to-ipa>=0.0.2",
     "pandas>=2.3.0",
     "pylangacq>=0.19.1",
+    "rich>=14.0.0",
 ]
