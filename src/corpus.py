@@ -1,91 +1,72 @@
 """Preprocess CHILDES corpora."""
 
+from os import walk
 from pathlib import Path
-import re
 from collections import Counter
 import pandas as pd
 from rich.progress import track
+from rich import console
 import pylangacq
-import eng_to_ipa as ipa
 
-path = Path("data", "CHILDES", "Bates", "Free20")
-files = list(path.glob("*.cha"))
-
-all_tokens = []
-errors = []
-
-for file in track(files, description="Extracting words"):
-    try:
-        data = pylangacq.read_chat(str(file))
-        tokens = data.words()
-        all_tokens.extend(tokens)
-    except ValueError as e:
-        print(f"Error reading file {file}: {e}")
-        errors.append(file)
-
-# Count token frequency
-token_counts = Counter(all_tokens)
-print(f"\nTotal unique tokens: {len(token_counts)}")
-
-# Initialize lists for the table
-tokens, freqs, phon_trans, syll1, syll2 = [], [], [], [], []
-no_transcription = []
+con = console.Console()
 
 
-# Function to split phonetic transcription into syllables (very simplified)
-def split_syllables(phonetic):
-    return re.split(r"(?<=[aeiouɑɛɪʊɔəæʌ])(?=[^aeiouɑɛɪʊɔəæʌ])", phonetic)
+def find_datasets(corpus: str) -> list[Path]:
+    """Find datasets in corpus.
+
+    Args:
+        corpus (str): _description_
+
+    Returns:
+        list[Path]: _description_
+    """
+    datasets = []
+    for root, _, files in walk(corpus):
+        for f in files:
+            datasets.append(Path(root, f))
+    return [d for d in datasets if str(d).endswith(".cha")]
 
 
-# Build the table
-for token, freq in token_counts.items():
-    tokens.append(token)
-    freqs.append(freq)
+def process_corpus(path: str) -> pd.DataFrame:
+    """Make DataFrame with word frequencies.
 
-    try:
-        phon = ipa.convert(token)
-    except:
-        phon = ""
+    Args:
+        freqs (Counter): Word frequencies.
+        file (str): Path to the output CSV file.
 
-    if phon.strip() == "":
-        no_transcription.append(token)
+    Returns:
+        pd.DataFrame: _description_
+    """
+    corpora = [Path(root, d) for root, dirs, _ in walk(path) for d in dirs]
+    for corpus in corpora:
+        con.rule(f"Processing corpus [bold]{corpus.name}[/bold]")
+        datasets = find_datasets(corpus)
+        con.print(f"Found {len(datasets)} datasets")
+        table = pd.DataFrame(columns=["corpus", "subdir", "dataset", "token", "count"])
+        errors = []
+        for i, dataset in track(enumerate(datasets), "Computing frequencies..."):
+            tokens = []
+            try:
+                data = pylangacq.read_chat(str(dataset))
+                tokens.extend(data.words())
+                words, counts = [], []
+                for word, count in Counter(tokens).items():
+                    words.append(word)
+                    counts.append(count)
+                data = {
+                    "corpus": corpus.name,
+                    "word": words,
+                    "count": counts,
+                }
+                table = pd.concat([table, pd.DataFrame(data)])
+            except ValueError:
+                errors.append(dataset.name)
+            con.print(f"Completed [{i + 1]} / {len(corpora)})
+    con.print(f"[red]Error reading {len(errors)} datasets: {errors}[/red]")
+    table = table.groupby(["corpus", "token"]).sum()
+    table = table.sort_values(by="count", ascending=False).reset_index(drop=True)
+    return table
 
-    phon_trans.append(phon)
-    if phon.strip():
-        syls = split_syllables(phon)
-        syll1.append(syls[0] if len(syls) > 0 else "")
-        syll2.append(syls[1] if len(syls) > 1 else "")
-    else:
-        syll1.append("")
-        syll2.append("")
 
-# Create DataFrame
-df = pd.DataFrame(
-    {
-        "Token": tokens,
-        "Frequency": freqs,
-        "Phon_Transcription": phon_trans,
-        "First_Syllable": syll1,
-        "Second_Syllable": syll2,
-    }
-)
-
-# Sort by frequency
-df = df.sort_values(by="Frequency", ascending=False).reset_index(drop=True)
-
-# Save complete table to Excel
-excel_name = "ALL_tokens_phon_FULL.xlsx"
-df.to_excel(excel_name, index=False)
-
-# Save tokens without transcription separately
-missing_path = "tokens_without_transcription.csv"
-pd.DataFrame({"Token": no_transcription}).to_csv(
-    missing_path, index=False, encoding="utf-8-sig"
-)
-
-# Print summary
-print("\nProcessing complete.")
-print(df.head(10))
-print(f"\nTotal files processed: {len(files)}")
-print(f"Files skipped due to errors: {len(errors)}")
-print(f"Words without transcription: {len(no_transcription)}")
+if __name__ == "__main__":
+    COUNTS = process_corpus(Path("data", "CHILDES", "ENG-NA"))
