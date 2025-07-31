@@ -1,0 +1,16 @@
+project:
+  render:
+    - docs/index.qmd
+title: "ssp-corpus"
+format: typst
+bibliography: docs/references.bib
+mainfont: Arial
+
+echo: false
+warning: false
+error: false
+freeze: false
+code-folded: true
+fig-dpi: 800
+
+
