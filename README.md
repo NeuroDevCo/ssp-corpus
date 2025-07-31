@@ -1,3 +1,3 @@
-# template-project-py
+# ssp-corpus
 
-This is a template repository for Python research projects in the Neurodevelopment and Comparative Cognition group. It contains a series of suggested subdirectories and files that standardize the structure across projects.
+A cross-linguistic corpus analysis on the prevalence of the Sonority Sequencing Principle (SSP) in infant directed speech.
