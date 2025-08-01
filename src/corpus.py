@@ -1,67 +1,276 @@
-"""Preprocess CHILDES corpora."""
+"""Preprocess Wiktionary corpora."""
 
-from os import walk
 from pathlib import Path
-from collections import Counter
-import pandas as pd
+from itertools import groupby
+from datetime import datetime
+import polars as pl
+import numpy as np
+from panphon import FeatureTable, sonority
+import lingtypology
+import wikipron
 from rich.progress import track
-from rich import console
-import pylangacq
 
-con = console.Console()
+FT = FeatureTable()
+S = sonority.Sonority()
+SON = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
 
 
-def find_datasets(corpus: str) -> list[Path]:
-    """Find datasets in corpus.
-
-    Args:
-        corpus (str): _description_
+def get_languages() -> pl.DataFrame:
+    """Get available languages in Glottolog.
 
     Returns:
-        list[Path]: _description_
+        pl.DataFrame: Available languages in Glottolog.
     """
-    datasets = []
-    for root, _, files in walk(corpus):
-        for f in files:
-            datasets.append(Path(root, f))
-    return [d for d in datasets if str(d).endswith(".cha")]
+    return (
+        pl.DataFrame(lingtypology.glottolog.glottolog)
+        .rename(lambda x: x.lower())
+        .filter(pl.col("status") != "Extinct")
+        .drop_nulls("iso639p3code")
+    )
 
 
-def process_corpus(path: str) -> pd.DataFrame:
-    """Make DataFrame with word frequencies.
+class EmptyLanguage(Exception):
+    pass
+
+
+def scrape_language(lang: str, conf: wikipron.Config):
+    lang_name = lingtypology.glottolog.get_by_iso(lang)
+    c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
+    words, phons = [], []
+    msg = f"{lang_name} ({lang}) ({datetime.now().strftime("%Y-%m-%d %H:%M")})..."
+    for w, p in track(wikipron.scrape(c), msg):
+        words.append(w)
+        phons.append(p)
+    df = pl.DataFrame({"word": words, "phon": phons})
+    if len(df) == 0:
+        raise EmptyLanguage()
+    return df
+
+
+def get_pronuciations(lang: str):
+    try:
+        c = wikipron.Config(
+            key=lang,
+            syllable_boundaries=True,
+            stress=True,
+        )
+        df = scrape_language(lang, c)
+    except EmptyLanguage:
+        print(f"{lang}: No broad pronunciations found, trying narrow pronunciations")
+        try:
+            c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
+            df = scrape_language(lang, c)
+        except EmptyLanguage:
+            print(f"{lang}: No narrow pronunciations found, skipping language")
+            return None
+    df.write_csv(Path("data", "raw") / f"{lang}.csv")
+    return df
+
+
+def count_segments(x: str = "str", **kwargs):
+    return len(FT.word_fts(x, **kwargs))
+
+
+def count_clusters(x: str, symbol: str = "V") -> int:
+    """Count the number of clusters of a particular type of segment in a phonological word form.
+
+    For instance, if looking for vocalic clusters (say, `symbol = "V"`), "CVVC" has one cluster, while "CVCV" has two clusters.
 
     Args:
-        freqs (Counter): Word frequencies.
-        file (str): Path to the output CSV file.
+        x (str): Syllabic structure to analyse.
+        symbol (str, optional): Symbol of the segment type to look for. Defaults to "V".
 
     Returns:
-        pd.DataFrame: _description_
+        int: Number of detected clusters.
     """
-    corpora = [Path(root, d) for root, dirs, _ in walk(path) for d in dirs]
-    con.rule(f"Processing language [bold]{path.name}[/bold]")
-    for corpus in track(corpora):
-        datasets = find_datasets(corpus)
-        con.print(f"Corpus {corpus.name} ({len(datasets)} datasets)")
-        table = pd.DataFrame(columns=["corpus", "subdir", "dataset", "token", "count"])
-        errors = []
-        for dataset in enumerate(datasets):
-            tokens = []
-            try:
-                data = pylangacq.read_chat(str(dataset))
-                tokens.extend(data.words())
-                words, counts = [], []
-                for word, count in Counter(tokens).items():
-                    words.append(word)
-                    counts.append(count)
-                data = {"corpus": corpus.name, "word": words, "count": counts}
-                table = pd.concat([table, pd.DataFrame(data)])
-            except ValueError:
-                errors.append(dataset.name)
-    con.print(f"[red]Error reading {len(errors)} datasets: {errors}[/red]")
-    table = table.groupby(["corpus", "token"]).sum()
-    table = table.sort_values(by="count", ascending=False).reset_index(drop=True)
-    return table
+    return len([b for a, b in groupby(x) if a == symbol])
+
+
+def has_one_peak(x: list[int] or np.array) -> bool:
+    """Check if only has one maximum.
+
+    Args:
+        x (np.array): Array to evaluate.
+
+    Returns:
+        bool: True if the array only has one peak, False otherwise.
+    """
+    d = np.diff(x)
+    return bool(np.sum(np.sign(d[1:]) != np.sign(d[:-1])) < 2)
+
+
+def classify_segments(x: str, **kwargs) -> str:
+    """Classify the segments of a word form into vowels (V) and consonants (C).
+
+    Args:
+        x (str): Phonological form to classify in IPA formant. The provided string is normalized before classification. Both narrow and broad IPA formats are accepted. Syllable boundaries and supresegmental information is removed.
+        kwargs: Additional arguments passed to ``FeatureTable().word_fts``.
+
+    Returns:
+        str: Syllabic structure, with consonants (C) and vowels (V).
+    """
+    struct = ""
+    for s in FT.word_fts(x, **kwargs):
+        if s.data["cons"] == 1:
+            struct += "C"
+        else:
+            struct += "V"
+    return struct
+
+
+def extract_sonority(x: str) -> list[int]:
+    """Get sonority score (1-9) of the segments of a word-form.
+
+    Args:
+        x (str): Phonological form of the to score in IPA formant.
+
+    Returns:
+        list[int]: Sonority scores of each segment in the word-form.
+    """
+    return [SON[s] for s in x if s in SON]
+
+
+def get_lang_family(iso: str):
+    """Classify language family based on Glottolog."""
+    return lingtypology.glottolog.get_by_iso(iso)
+
+
+def get_words(file: str, syll_boundaries: [str] = None) -> pl.DataFrame:
+    """Preprocess word forms of a language corpus.
+
+    Args:
+        file (str): Raw data of the corpus, as generated by Wiktionary.
+
+    Returns:
+        pl.DataFrame: Processed corpus.
+    """
+    if syll_boundaries is None:
+        syll_boundaries = [r".", "ˈ", "ˌ"]
+    df = (
+        pl.read_csv(file, separator="\t", has_header=False)
+        .rename({"column_1": "word", "column_2": "phon"})
+        .unique(pl.col("phon"))
+        .with_columns(pl.col("phon").str.replace_all(" ", ""))
+        .with_columns(
+            pl.col("phon")
+            .str.replace_many({b: "." for b in syll_boundaries})
+            .str.strip_chars(".")
+        )
+        .with_columns(
+            pl.col("phon")
+            .str.split(".")
+            .map_elements(
+                lambda x: [xi for xi in x if len(xi) > 0],
+                return_dtype=pl.List(pl.String),
+            )
+            .alias("syll")
+        )
+        .with_columns(pl.col("phon").str.len_chars().alias("n_phon"))
+        .with_columns(pl.col("syll").list.len().alias("n_syll"))
+    )
+    return df
+
+
+def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
+    """Preprocess word forms of a language corpus.
+
+    Args:
+        file (str): Raw data of the corpus, as generated by Wiktionary.
+
+    Returns:
+        pl.DataFrame: Processed corpus.
+    """
+    df = (
+        x.explode("syll")
+        .with_columns(
+            pl.col("syll")
+            .map_elements(classify_segments, return_dtype=pl.String)
+            .alias("struct")
+        )
+        .filter(
+            pl.col("struct").map_elements(
+                lambda x: count_clusters(x, "V") == 1, return_dtype=pl.Boolean
+            )
+        )
+        .with_columns(
+            pl.col("syll")
+            .map_elements(extract_sonority, return_dtype=pl.List(pl.Int64))
+            .alias("sonority"),
+            pl.col("syll").str.len_chars().alias("n_phon"),
+        )
+        .filter(pl.col("sonority") != [""])
+        .with_columns(
+            pl.col("sonority")
+            .list.diff(null_behavior="drop")
+            .map_elements(has_one_peak, return_dtype=pl.Boolean)
+            .alias("is_ssp"),
+        )
+        .group_by(pl.col(["syll", "n_phon", "struct", "sonority", "is_ssp"]))
+        .agg(pl.len().alias("n"))
+        .sort(pl.col("n"), descending=True)
+    )
+    return df
+
+
+class NWordsError(Exception):
+    pass
+
+
+class NSyllError(Exception):
+    pass
+
+
+def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
+    """Cast list columns to strings for saving as CSV."""
+    return x.with_columns(
+        pl.col(pl.List(pl.Int64), pl.List(pl.String))
+        .cast(pl.List(pl.String))
+        .list.join(sep)
+    )
+
+
+def add_language_col(x: pl.DataFrame, lang: str):
+    """Add language column to dataset."""
+    return x.with_columns(pl.lit(lang).alias("lang")).select(
+        x.columns[0], "lang", pl.exclude(x.columns[0], "lang")
+    )
+
+
+def get_corpora(
+    inpath: Path = Path("data", "raw"),
+    outpath: Path = Path("data", "processed"),
+    min_words: int = 100,
+    min_syll: int = 20,
+) -> tuple[pl.DataFrame]:
+    """Main script."""
+
+    words, syll = [], []
+    files = list(Path("data", "raw").glob("*.tsv"))
+    for f in track(files, total=len(files)):
+        lang = f.name.rsplit(".", maxsplit=1)[0]
+        try:
+            # process words
+            w = add_language_col(get_words(f), lang)
+            if len(w) < min_words:
+                raise NWordsError(f"Dropped {lang} ({len(w)} words < {min_words})")
+            words.append(w)
+            cast_to_str(w).write_csv(outpath / "words" / f"{lang}.csv")
+            # process syllables
+            s = add_language_col(get_syllables(w), lang)
+            if len(s) < min_syll:
+                raise NSyllError(f"Dropped {lang} ({len(s)} syllables < {min_syll})")
+            syll.append(s)
+            cast_to_str(s).write_csv(outpath / "syllables" / f"{lang}.csv")
+        except (NWordsError, NSyllError, pl.exceptions.NoDataError) as e:
+            print(e)
+    if len(words) > 0:
+        words = pl.concat(words)
+    if len(syll) > 0:
+        syll = pl.concat(syll)
+    return words, syll
 
 
 if __name__ == "__main__":
-    COUNTS = process_corpus(Path("data", "CHILDES", "ENG-NA"))
+    WORDS, SYLL = get_corpora()
+    cast_to_str(WORDS).write_csv(Path("out", "words.csv"))
+    cast_to_str(SYLL).write_csv(Path("out", "syllables.csv"))

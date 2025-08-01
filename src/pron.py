@@ -5,9 +5,7 @@ import polars as pl
 from iso639.language import ALL_LANGUAGES
 import wikipron as wkp
 from pyglottolog import Glottolog
-
-Glottolog.write_languoids_table()
-Glottolog(Path("/F:", "glottolog"))
+import lingtypology
 
 
 def get_iso_langs() -> dict[str, str]:
