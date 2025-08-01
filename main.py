@@ -6,20 +6,15 @@ Main script of the project.
 
 from pathlib import Path
 import polars as pl
-from matplotlib import pyplot as plt
-
+from src import corpus, model
 
 if __name__ == "__main__":
-    data = []
-    for f in Path("data", "processed").glob("*.csv"):
-        lang = f.name.rsplit(".", 1)[0]
-        df = pl.read_csv(f)
-        df = df.with_columns(pl.lit(lang).alias("lang"))
-        data.append(df)
-    data = pl.concat(data)
-
-    agg = (
-        data.group_by(pl.col(["lang", "struct", "is_ssp"]))
-        .len()
-        .with_columns((pl.col("len") / pl.sum("len")).alias("percent"))
+    WORDS, SYLL = corpus.get_corpora()
+    SSP = (
+        SYLL.group_by("lang").agg(pl.mean("is_ssp").alias("prop_ssp")).sort("prop_ssp")
     )
+    SSP.write_csv(Path("out", "ssp.csv"))
+
+    DATA = model.prepare_data(SSP)
+    MOD, TRACE, Y_LIKE = model.fit_model(*DATA)
+    model.plot_estimations(idata=TRACE)
