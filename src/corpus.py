@@ -2,12 +2,10 @@
 
 from pathlib import Path
 from itertools import groupby
-from datetime import datetime
 import polars as pl
 import numpy as np
 from panphon import FeatureTable, sonority
 import lingtypology
-import wikipron
 from rich.progress import track
 
 FT = FeatureTable()
@@ -15,59 +13,15 @@ S = sonority.Sonority()
 SON = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
 
 
-def get_languages() -> pl.DataFrame:
-    """Get available languages in Glottolog.
+def count_segments(x: str, **kwargs) -> int:
+    """Count the number of segments in a word-form.
+
+    Args:
+        x (str, optional): Word-form in IPA format. Defaults to "str".
 
     Returns:
-        pl.DataFrame: Available languages in Glottolog.
-    """
-    return (
-        pl.DataFrame(lingtypology.glottolog.glottolog)
-        .rename(lambda x: x.lower())
-        .filter(pl.col("status") != "Extinct")
-        .drop_nulls("iso639p3code")
-    )
-
-
-class EmptyLanguage(Exception):
-    pass
-
-
-def scrape_language(lang: str, conf: wikipron.Config):
-    lang_name = lingtypology.glottolog.get_by_iso(lang)
-    c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
-    words, phons = [], []
-    msg = f"{lang_name} ({lang}) ({datetime.now().strftime("%Y-%m-%d %H:%M")})..."
-    for w, p in track(wikipron.scrape(c), msg):
-        words.append(w)
-        phons.append(p)
-    df = pl.DataFrame({"word": words, "phon": phons})
-    if len(df) == 0:
-        raise EmptyLanguage()
-    return df
-
-
-def get_pronuciations(lang: str):
-    try:
-        c = wikipron.Config(
-            key=lang,
-            syllable_boundaries=True,
-            stress=True,
-        )
-        df = scrape_language(lang, c)
-    except EmptyLanguage:
-        print(f"{lang}: No broad pronunciations found, trying narrow pronunciations")
-        try:
-            c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
-            df = scrape_language(lang, c)
-        except EmptyLanguage:
-            print(f"{lang}: No narrow pronunciations found, skipping language")
-            return None
-    df.write_csv(Path("data", "raw") / f"{lang}.csv")
-    return df
-
-
-def count_segments(x: str = "str", **kwargs):
+        int: Number of segments in the word-form.
+    """  # pylint: disable=line-too-long
     return len(FT.word_fts(x, **kwargs))
 
 
@@ -82,11 +36,11 @@ def count_clusters(x: str, symbol: str = "V") -> int:
 
     Returns:
         int: Number of detected clusters.
-    """
+    """  # pylint: disable=line-too-long
     return len([b for a, b in groupby(x) if a == symbol])
 
 
-def has_one_peak(x: list[int] or np.array) -> bool:
+def has_one_peak(x: list[int] | np.array) -> bool:
     """Check if only has one maximum.
 
     Args:
@@ -94,7 +48,7 @@ def has_one_peak(x: list[int] or np.array) -> bool:
 
     Returns:
         bool: True if the array only has one peak, False otherwise.
-    """
+    """  # pylint: disable=line-too-long
     d = np.diff(x)
     return bool(np.sum(np.sign(d[1:]) != np.sign(d[:-1])) < 2)
 
@@ -108,7 +62,7 @@ def classify_segments(x: str, **kwargs) -> str:
 
     Returns:
         str: Syllabic structure, with consonants (C) and vowels (V).
-    """
+    """  # pylint: disable=line-too-long
     struct = ""
     for s in FT.word_fts(x, **kwargs):
         if s.data["cons"] == 1:
@@ -126,7 +80,7 @@ def extract_sonority(x: str) -> list[int]:
 
     Returns:
         list[int]: Sonority scores of each segment in the word-form.
-    """
+    """  # pylint: disable=line-too-long
     return [SON[s] for s in x if s in SON]
 
 
@@ -135,7 +89,7 @@ def get_lang_family(iso: str):
     return lingtypology.glottolog.get_by_iso(iso)
 
 
-def get_words(file: str, syll_boundaries: [str] = None) -> pl.DataFrame:
+def get_words(file: str, syll_boundaries: list[str] = None) -> pl.DataFrame:
     """Preprocess word forms of a language corpus.
 
     Args:
@@ -143,7 +97,7 @@ def get_words(file: str, syll_boundaries: [str] = None) -> pl.DataFrame:
 
     Returns:
         pl.DataFrame: Processed corpus.
-    """
+    """  # pylint: disable=line-too-long
     if syll_boundaries is None:
         syll_boundaries = [r".", "ˈ", "ˌ"]
     df = (
@@ -179,7 +133,7 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
 
     Returns:
         pl.DataFrame: Processed corpus.
-    """
+    """  # pylint: disable=line-too-long
     df = (
         x.explode("syll")
         .with_columns(
@@ -213,11 +167,11 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
 
 
 class NWordsError(Exception):
-    pass
+    """No words extracted."""
 
 
 class NSyllError(Exception):
-    pass
+    """No syllables extracted."""
 
 
 def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
@@ -245,7 +199,7 @@ def get_corpora(
     """Main script."""
 
     words, syll = [], []
-    files = list(Path("data", "raw").glob("*.tsv"))
+    files = list(inpath.glob("*.tsv"))
     for f in track(files, total=len(files)):
         lang = f.name.rsplit(".", maxsplit=1)[0]
         try:

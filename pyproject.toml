@@ -26,4 +26,5 @@ dependencies = [
     "python-iso639>=2025.2.18",
     "rich>=14.1.0",
     "wikipron>=1.3.3",
+    "zmq>=0.0.0",
 ]
