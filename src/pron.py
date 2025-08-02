@@ -83,7 +83,7 @@ def get_pronuciations(lang: str) -> pl.DataFrame:
             return None
 
 
-def get_scraped_languages(path: str | Path = Path("data", "raw")) -> list[str]:
+def get_scraped_languages(path: Path = Path("data", "raw")) -> list[str]:
     """Evaluate is language has already been scraped.
 
     Args:
@@ -100,7 +100,7 @@ def scrape_all_languages():
     langs = get_languages().get_column("iso639p3code").to_list()
     n = len(langs)
     for i, l in track(enumerate(langs), f"Scraping {n} languages...", total=n):
-        if l not in get_scraped_languages(l):
+        if l not in get_scraped_languages():
             print(f"{i + 1}) {datetime.now().strftime("%Y-%m-%d %H:%M")}")
             _ = get_pronuciations(l)
         else:
