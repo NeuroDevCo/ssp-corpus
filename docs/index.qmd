@@ -1,25 +1,60 @@
 
-```{r}
-# | label: setup
-library(readr)
-library(here)
+## Method
 
-set_here("..")
-
-raw <- read_csv(here("out", "pronunciations.csv"), show_col_types = FALSE)
-dat <- read_csv(here("out", "ssp.csv"), show_col_types = FALSE)
-
+```{python}
+from pathlib import Path
+import polars as pl
+from matplotlib import pyplot as plt
+from src import pron
 ```
 
-## Datasets
+### Dataset acquisition
 
-![](../img/families.png)
+```{python}
+glotto = pron.get_languages()
+scraped = pron.get_scraped_languages()
+words = pl.read_csv(Path("out", "words.csv"))
+syllables = pl.read_csv(Path("out", "syllables.csv"))
+languages = (
+    words.group_by("lang")
+    .agg(pl.len().alias("n"))
+    .sort("n", descending=True)
+    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
+)
+languages_syll = (
+    syllables.group_by("lang")
+    .agg(pl.len().alias("n_syll"))
+    .join(languages.with_row_index("sort"), on="lang")
+    .sort("sort")
+    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
+)
+languages_struct = (
+    syllables.unique(pl.col(["lang", "struct"]))
+    .group_by(pl.col(["lang"]))
+    .agg(pl.len().alias("n_struct"))
+    .join(languages.with_row_index("sort"), on="lang")
+    .sort("sort")
+    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
+)
+```
 
-![](../img/syllables.png)
+All `{python} len(glotto)` languages included in the Glottolog database were targeted. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(languages)` languages with at least 100 pronunciations available in Wiktionary.
 
-![](../img/ssp.png)
+```{python}
+fig, (ax1, ax2) = plt.subplots(nrows=2)
+ax1.scatter(languages["lang"], languages["n"], color="tab:red")
+ax1.scatter(languages_syll["lang"], languages_syll["n_syll"], color="tab:blue")
+plt.xticks(rotation=90)
+ax1.set_xlabel(None)
+ax1.set_ylabel("Number of prounciations")
+ax1.tick_params(axis="x", labelrotation=90)
+ax1.set_xticks([])
+
+ax2.bar(languages_struct["lang"], languages_struct["n_struct"], color="tab:orange")
+ax2.set_xlabel(None)
+ax2.set_ylabel("Number of syllabic structures")
+ax2.tick_params(axis="x", labelrotation=90) 
+```
 
 
-
-## References
-
+For each language, and for each retrieved pronunciation, we chunked the phonological word-forms into syllable candidates by splitting the IPA transcription at syllabic boundaries, primary and secondary stress markers. The dataset of each language was then expanded to assign one row to each syllable candidate. We then used the `panphon` Python package [@mortensen2016panphon] to extract the features of each syllable candidate. First, we split the phonological form of the syllable candidate into phonological segments. Second, we classified each segment as consonant (C) or vowel (V). Glides were classified as vowels. Third, we counted the number of vocalic clusters (number of group of consecutive segments classified as vocalic) in each syllable candidate. If more than cluster was detected, the syllable candidate was considered to include more than one syllable and was filtered out. This was the case when the original phonological form of the word retrieved from Wiktionary did not include syllabic boundaries. Finally, we calculated the sonority contour of each syllable: using panphon, we extracted the sonority score of each segment (an integer ranging from 1 to 9). If the sonority contour had more than one local maximum, the syllable was classified as violating the Sonority Sequencing Principle (SSP). If the sonority contour had no peaks (flat) or had only one peak, the syllable was classified as following the SSP.

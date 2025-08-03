@@ -2,7 +2,10 @@ backup/
 out/**/*.csv
 data/**/*.csv
 data/**/*.tsv
-
+img/**/*.png
+img/**/*.jpg
+img/**/*.jpeg
+img/**/*.svg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
