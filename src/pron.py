@@ -6,29 +6,9 @@ import polars as pl
 import lingtypology
 import wikipron
 from rich.progress import track
+from rich.console import Console
 
-
-def get_lang_populations(
-    file: str | Path = Path("data", "koplenig2023.tsv")
-) -> pl.DataFrame:
-    """Get Glottolog language populations from Ethnologue.
-
-    Args:
-        file (str, optional): Path to the TSV by Koplenig et al. (2023).
-
-    Notes:
-        Curated by Koplenig et al. (2023), rertieved from https://osf.io/p5ejc.
-
-    References:
-
-        Koplenig, A., Wolfer, S. & Meyer, P. A large quantitative analysis of written language challenges the idea that all languages are equally complex. Sci Rep 13, 15351 (2023). https://doi.org/10.1038/s41598-023-42327-3
-    """
-    return (
-        pl.read_csv(file, separator="\t")
-        .rename(lambda x: x.lower())
-        .select(["iso", "popsize"])
-        .rename({"iso": "iso639p3code", "popsize": "pop_size"})
-    )
+con = Console()
 
 
 def get_languages() -> pl.DataFrame:
@@ -56,61 +36,53 @@ class EmptyLanguage(Exception):
     "Language has no available pronunciations."
 
 
-def scrape_language(lang: str, conf: wikipron.Config):
-    """Scrape pronunciations from language in Wiktionary.
+def _scrape_lang_wrapper(
+    lang: str, conf: wikipron.Config, path: Path = Path("data", "raw")
+):
+    """Wrapper for scraping pronunciations from language in Wiktionary.
 
     Args:
         lang (str): ISO-639-3 code of language.
-        conf (wikipron.Config): _description_
+        conf (wikipron.Config): Scraping params.
 
     Raises:
-        EmptyLanguage: _description_
-
-    Returns:
-        _type_: _description_
+        EmptyLanguage: No available pronunciations for language.
     """
-    lang_name = lingtypology.glottolog.get_by_iso(lang)
-    words, phons = [], []
-    print(f"{lang_name} ({lang})...")
-    for w, p in wikipron.scrape(conf):
-        words.append(w)
-        phons.append(p)
-    df = pl.DataFrame({"word": words, "phon": phons})
-    if len(df) == 0:
+    fname = path / f"{lang}.csv"
+    if fname.exists():
+        return None
+    i = 0
+    with open(fname, encoding="utf-8", mode="a+") as f:
+        for w, p in wikipron.scrape(conf):
+            f.writelines(w + "," + p + "\n")
+            i += 1
+    if i == 0:
         raise EmptyLanguage()
-    return df
+    con.print(f"\t[green]{lang}: {i} pronunciations found[/green]")
+    return None
 
 
-def get_pronuciations(lang: str) -> pl.DataFrame:
+def scrape_lang(lang: str, path: Path = Path("data", "raw")):
     """Get pronunciations for language.
 
     Args:
         lang (str): ISO-639-3 code of language.
-
-    Returns:
-        pl.DataFrame: DataFrame with word and pronunciation pairs.
+        path (Path, optional): Path to the folder in which the file will be created and saved.
     """
     try:
         c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
-        df = scrape_language(lang, c)
-        df.write_csv(Path("data", "raw") / f"{lang}.csv")
-        return df
-    except ValueError as e:
-        print(e)
-        return None
+        _scrape_lang_wrapper(lang, c, path)
+    except (ValueError, KeyError, FileNotFoundError) as e:
+        con.print(f"[red]{e}[/red]")
     except EmptyLanguage:
-        print(f"{lang}: No broad pronunciations")
+        con.print(f"\t[yellow]{lang}: No broad pronunciations[/yellow]")
         try:
             c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
-            df = scrape_language(lang, c)
-            df.write_csv(Path("data", "raw") / f"{lang}.csv")
-            return df
+            _scrape_lang_wrapper(lang, c, path)
         except EmptyLanguage:
-            print(f"{lang}: No narrow pronunciations")
-            return None
-        except (ValueError, KeyError) as e:
-            print(e)
-            return None
+            con.print(f"\t[red]{lang}: No narrow pronunciations[/red]")
+        except (ValueError, KeyError, FileNotFoundError) as e:
+            con.print(f"[red]{e}[/red]")
 
 
 def get_scraped_languages(
@@ -119,7 +91,7 @@ def get_scraped_languages(
     """Evaluate is language has already been scraped.
 
     Args:
-        path (str | Path): Path to raw data.
+        path (Path): Path to raw data.
 
     Returns:
         list[str]: List of scraped languages.
@@ -134,27 +106,11 @@ def get_scraped_languages(
 def scrape_all_languages():
     """Scrape all languages."""
     langs = get_languages().get_column("iso639p3code").to_list()
-    n = len(langs)
-    for i, la in track(enumerate(langs), f"Scraping {n} languages...", total=n):
-        if la not in get_scraped_languages():
-            print(f"{i + 1}) {datetime.now().strftime("%Y-%m-%d %H:%M")}")
-            _ = get_pronuciations(la)
-        else:
-            print(f"{i + 1}) {la} has already been scraped")
-
-
-def count_pronunciations(lang: str) -> int:
-    """Count the number of scraped pronunciations in a langugae.
-
-    Args:
-        lang (str): ISO-639-3 code of language.
-
-    Returns:
-        int: Number of scraped pronunciations.
-    """
-    if lang not in get_scraped_languages():
-        return 0
-    return len(pl.read_csv(Path("data", "raw") / f"{lang}.csv"))
+    langs = sorted([l for l in langs if l not in get_scraped_languages()])
+    for i, l in enumerate(langs):
+        time = datetime.now().strftime("%Y-%m-%d %H:%M")
+        con.print(f"[{i + 1}/{len(langs)}] {l} ({time})")
+        scrape_lang(l)
 
 
 if __name__ == "__main__":
