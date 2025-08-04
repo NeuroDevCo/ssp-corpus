@@ -5,10 +5,57 @@ from datetime import datetime
 import polars as pl
 import lingtypology
 import wikipron
-from rich.progress import track
 from rich.console import Console
 
 con = Console()
+
+
+def add_missing_headers(path: Path = Path("data", "raw")):
+    """Add header to file if missing."""
+    for f in path.glob("*.csv"):
+        header = ["word", "phon"]
+        try:
+            d = pl.read_csv(f, has_header=False)
+            if all(c in header for c in d.slice(0, 1).to_numpy().tolist()[0]):
+                d = d.rename(d.head(1).to_dicts().pop())
+                d.write_csv(f)
+            elif all(
+                c in {k: v for k, v in zip(d.columns, header)}
+                for c in d.slice(0, 1).to_numpy().tolist()[0]
+            ):
+                d = d.slice(1, len(d) - 1)
+                d = d.rename({k: v for k, v in zip(d.columns, header)})
+                d.write_csv(f)
+            elif all("column_" in c for c in d.columns):
+                d = d.rename({k: v for k, v in zip(d.columns, header)})
+                d.write_csv(f)
+            else:
+                pass
+        except pl.exceptions.NoDataError:
+            pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f.name)
+
+
+def get_lang_populations(
+    file: str | Path = Path("data", "koplenig2023.tsv")
+) -> pl.DataFrame:
+    """Get Glottolog language populations from Ethnologue.
+
+    Args:
+        file (str, optional): Path to the TSV by Koplenig et al. (2023).
+
+    Notes:
+        Curated by Koplenig et al. (2023), rertieved from https://osf.io/p5ejc.
+
+    References:
+
+        Koplenig, A., Wolfer, S. & Meyer, P. A large quantitative analysis of written language challenges the idea that all languages are equally complex. Sci Rep 13, 15351 (2023). https://doi.org/10.1038/s41598-023-42327-3
+    """
+    return (
+        pl.read_csv(file, separator="\t")
+        .rename(lambda x: x.lower())
+        .select(["iso", "popsize"])
+        .rename({"iso": "iso639p3code", "popsize": "pop_size"})
+    )
 
 
 def get_languages() -> pl.DataFrame:
@@ -30,6 +77,11 @@ def get_languages() -> pl.DataFrame:
         )
         .join(get_lang_populations(), on=["iso639p3code"])
     )
+
+
+def get_lang_name(iso: str):
+    """Classify language family based on Glottolog."""
+    return lingtypology.glottolog.get_by_iso(iso)
 
 
 class EmptyLanguage(Exception):
@@ -90,27 +142,30 @@ def get_scraped_languages(
 ) -> list[str]:
     """Evaluate is language has already been scraped.
 
+    Note:
+        A language is considered to be scraped if a CSV file with the same ISO-639-3 code is present in the ``path`` folder.
+
     Args:
-        path (Path): Path to raw data.
+        path (Path, optional): Path to raw data. Defaults to ``Path("data", "raw")``.
+        keep_empty (bool, optional): Should languages with no pronunciations available be included in the output? Defaults to False.
 
     Returns:
         list[str]: List of scraped languages.
     """
     if keep_empty:
         return [f.name.rsplit(".", 1)[0] for f in path.glob("*.csv")]
-    return [
-        f.name.rsplit(".", 1)[0] for f in path.glob("*.csv") if f.stat().st_size > 1e3
-    ]
+    files = path.glob("*.csv")
+    return [f.name.rsplit(".", 1)[0] for f in files if f.stat().st_size > 1e3]
 
 
 def scrape_all_languages():
     """Scrape all languages."""
     langs = get_languages().get_column("iso639p3code").to_list()
-    langs = sorted([l for l in langs if l not in get_scraped_languages()])
-    for i, l in enumerate(langs):
+    langs = sorted([la for la in langs if la not in get_scraped_languages()])
+    for i, la in enumerate(langs):
         time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        con.print(f"[{i + 1}/{len(langs)}] {l} ({time})")
-        scrape_lang(l)
+        con.print(f"[{i + 1}/{len(langs)}] {la} ({time})")
+        scrape_lang(la)
 
 
 if __name__ == "__main__":

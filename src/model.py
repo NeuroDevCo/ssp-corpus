@@ -1,18 +1,15 @@
 """Model SSP data."""
 
-from pathlib import Path
 import numpy as np
-from matplotlib import pyplot as plt
 import polars as pl
 import pymc as pm
-import arviz as az
 
 RANDOM_SEED = 1234
 rng = np.random.default_rng(RANDOM_SEED)
 
 
 def prepare_data(
-    data: pl.DataFrame, y_var: str = "prop_sspp", group_var: str = "lang"
+    data: pl.DataFrame, y_var: str = "is_ssp", group_var: str = "lang_family"
 ) -> tuple[np.ndarray]:
     """Prepare data for modelling.
 
@@ -60,35 +57,3 @@ def invlogit(x: float) -> float:
     """Calculate inverse logit function"""
     odds = np.exp(x)
     return odds / (1 + odds)
-
-
-def plot_estimations(
-    idata: az.InferenceData,
-    group_var: str = "lang",
-    file: str | Path = Path("img", "lang-estimations.png"),
-):
-    """Plot posterior estimations.
-
-    Args:
-        idata (az.InferenceData): Inference data from the model.
-        group_var (str, optional): Name of the grouping variable. Defaults to "lang".
-    """
-    group_means = idata.posterior["alpha"].mean(("chain", "draw"))
-    sorted_groups = idata.posterior[group_var].sortby(group_means)
-    fig, ax = plt.subplots(figsize=(6, 12))
-    az.plot_forest(
-        idata,
-        var_names=["alpha"],
-        transform=invlogit,
-        combined=True,
-        coords={group_var: sorted_groups},
-        colors="tab:red",
-        quartiles=False,
-        linewidth=2,
-        hdi_prob=0.89,
-        ax=ax,
-        markersize=10,
-        labeller=az.labels.NoVarLabeller(),
-    )
-    ax.tick_params(labelsize=10)
-    plt.savefig(path)

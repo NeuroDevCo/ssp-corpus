@@ -2,17 +2,18 @@
 ## Method
 
 ```{python}
+import sys
 from pathlib import Path
 import polars as pl
 from matplotlib import pyplot as plt
-from src import pron
+from src import scraping
 ```
 
 ### Dataset acquisition
 
 ```{python}
-glotto = pron.get_languages()
-scraped = pron.get_scraped_languages()
+glotto = scraping.get_languages()
+scraped = scraping.get_scraped_languages()
 words = pl.read_csv(Path("out", "words.csv"))
 syllables = pl.read_csv(Path("out", "syllables.csv"))
 languages = (
@@ -40,21 +41,30 @@ languages_struct = (
 
 All `{python} len(glotto)` languages included in the Glottolog database were targeted. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(languages)` languages with at least 100 pronunciations available in Wiktionary.
 
-```{python}
-fig, (ax1, ax2) = plt.subplots(nrows=2)
-ax1.scatter(languages["lang"], languages["n"], color="tab:red")
-ax1.scatter(languages_syll["lang"], languages_syll["n_syll"], color="tab:blue")
-plt.xticks(rotation=90)
-ax1.set_xlabel(None)
-ax1.set_ylabel("Number of prounciations")
-ax1.tick_params(axis="x", labelrotation=90)
-ax1.set_xticks([])
-
-ax2.bar(languages_struct["lang"], languages_struct["n_struct"], color="tab:orange")
-ax2.set_xlabel(None)
-ax2.set_ylabel("Number of syllabic structures")
-ax2.tick_params(axis="x", labelrotation=90) 
-```
+![Distribution of the `{python} len(languages)` languages included in the final dataset. Black dots indicate the location assigned to each language by Glottolog. The color and size of the shaded circles indicate the language family and estimated population of speakers of each language, respectively. The size of the empty black circles indicate the number of pronunciations retrived from each language. Large divergencies between the size of the shaded and empty circles indicate the the language is over or under-represented in the dataset.](../img/map.png){#fig-map}
 
 
 For each language, and for each retrieved pronunciation, we chunked the phonological word-forms into syllable candidates by splitting the IPA transcription at syllabic boundaries, primary and secondary stress markers. The dataset of each language was then expanded to assign one row to each syllable candidate. We then used the `panphon` Python package [@mortensen2016panphon] to extract the features of each syllable candidate. First, we split the phonological form of the syllable candidate into phonological segments. Second, we classified each segment as consonant (C) or vowel (V). Glides were classified as vowels. Third, we counted the number of vocalic clusters (number of group of consecutive segments classified as vocalic) in each syllable candidate. If more than cluster was detected, the syllable candidate was considered to include more than one syllable and was filtered out. This was the case when the original phonological form of the word retrieved from Wiktionary did not include syllabic boundaries. Finally, we calculated the sonority contour of each syllable: using panphon, we extracted the sonority score of each segment (an integer ranging from 1 to 9). If the sonority contour had more than one local maximum, the syllable was classified as violating the Sonority Sequencing Principle (SSP). If the sonority contour had no peaks (flat) or had only one peak, the syllable was classified as following the SSP.
+
+## Data analysis
+
+We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. First, we fit a model that estimated the average probability of the syllables of each language following the SSP. This model included each language as a group with a random intercept. Second, we fit a model that estimated the average probability of the syllables of language family following the SSP. This model included each language as a group, also with a random intercept. @eq-model shows a detailed implementation of both models model. We implemented the model in Python 3.12.7 using the PyMC package [@abril2023pymc], with four Monte Carlo chains, each with 2,000 iterations. Model diagnostics and posterior distribution preprocessing were conducted using the ArViZ Python package [@kumar2019arviz]. 
+
+$$
+\begin{aligned}
+\textbf{Linear regression model:} \\
+\log(\frac{\theta}{1 - \theta}) &= \alpha_{i} \\
+\alpha_{i} &\sim \mathcal{N}(\mu_{i}, \sigma_{i}) \\
+&\text{where}~i~\text{represents each language or language family} \\
+\\
+\textbf{Prior:} \\
+\mu_i &= \mathcal{N}(0, 1) \\
+\sigma_i &= \text{Exponential}(4)
+\end{aligned}
+$$ {#eq-model}
+
+## Results
+
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language, with a color-coded dot next to it indicatin gthe language family it belongs to (see @fig-map) for reference. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language, and its 89% highest density interval (HDI). The 89% HDI indicates is the range of consecutive values that contains the true value of the proportion with 89% probability, given the observed data and specified model. Means and 89% HDI are also numerically reported next to each language.](../img/estimates-lang.png){#fig-estimates-lang}
+
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 89% highest density interval (HDI). Means and 89% HDI are also numerically reported next to each language family.](../img/estimates-family.png){#fig-estimates-family}
