@@ -5,7 +5,6 @@ from functools import lru_cache
 import numpy as np
 import polars as pl
 import pymc as pm
-from pytensor import tensor as pt
 import arviz as az
 from scipy.stats import gaussian_kde
 from src import scraping

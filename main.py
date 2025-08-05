@@ -1,6 +1,7 @@
 """Main script."""
 
 from pathlib import Path
+import polars as pl
 from src import phonology, figures, model, scraping
 
 
