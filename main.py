@@ -1,29 +1,35 @@
 """Main script."""
 
-from pathlib import Path
-import polars as pl
+from functools import lru_cache
 from src import phonology, figures, model, scraping
 
-if __name__ == "__main__":
+
+@lru_cache
+def main():
     figures.plot_map()
-    LANGS = scraping.get_languages().rename({"iso639p3code": "lang"})
-    WORDS, SYLL = phonology.get_corpora()
-    DATA = SYLL.join(
-        LANGS.select(pl.col(["lang", "family_name", "language_name"])), on="lang"
-    )
-    Y, N, GROUPS = model.prepare_data(DATA, group_var="lang")
-    RESULTS = model.fit_model(y=Y, n=N, groups=GROUPS)
-    figures.plot_estimates_lang(
-        RESULTS[1],
-        GROUPS,
-        file=Path("img", "estimates-lang.png"),
-    )
-    Y, N, GROUPS = model.prepare_data(DATA, group_var="family_name")
-    FAM_RESULTS = model.fit_model(y=Y, n=N, groups=GROUPS)
-    figures.plot_estimates(
-        FAM_RESULTS[1],
-        GROUPS,
-        group_var="family_name",
-        figsize=(8, 6),
-        file=Path("img", "estimates-family.png"),
-    )
+    langs = scraping.get_languages().rename({"iso639p3code": "lang"})
+    words, syll = phonology.preprocess_langs()
+    data = model.proportion_by(syll, by=["lang", "language_name", "family_name"])
+    data.write_csv("out", "data.csv")
+    results = fit_model(data, group_var="family_name")
+
+    data_preds = data.join(
+        langs.select(["lang", "n_phon", "n_vow", "n_cons"]), on="lang", how="left"
+    ).drop_nulls()
+    results_base = fit_model(data_preds, group_var="family_name")
+
+    results_cons = fit_model_pred(data_preds, "n_cons", group_var="family_name")
+    print(compare_models(results_base[2], results_cons[2]))
+
+    results_phon = fit_model_pred(data_preds, "n_phon", group_var="family_name")
+    print(compare_models(results_base[2], results_phon[2]))
+
+    results_vow = fit_model_pred(data_preds, "n_vow", group_var="family_name")
+    print(compare_models(results_base[2], results_vow[2]))
+
+    figures.plot_proportions(data)
+    return langs, words, syll, data, results
+
+
+if __name__ == "__main__":
+    LANGS, WORDS, SYLL, DATA, RESULTS = main()

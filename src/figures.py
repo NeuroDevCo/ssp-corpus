@@ -11,12 +11,7 @@ import arviz as az
 from src import scraping, model
 
 
-def get_color_codes(
-    x: list[str] | np.ndarray,
-    name: str = "family_name",
-    cmap: str = "rainbow",
-    alpha: float = 1.0,
-) -> dict[str, str]:
+def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]:
     """Assign color to each language family.
 
     Args:
@@ -27,7 +22,13 @@ def get_color_codes(
     Returns:
         dict: Language family and hex color pairs.
     """
-    f = sorted(list(set(x)))
+    lang = (
+        scraping.get_languages()
+        .unique("family_name")
+        .select("family_name")
+        .sort("family_name")
+    )
+    f = lang.get_column("family_name").sort().to_list()
     cmap = plt.get_cmap(cmap)
     vals = cmap(np.linspace(0, 1, len(f)), alpha=alpha)
     return {k: cm.rgb2hex(v, keep_alpha=True) for k, v in zip(f, vals)}
@@ -57,40 +58,27 @@ def plot_n_words(
     """Plot the distribution of distinct word-forms extracted for each language."""
 
 
-def plot_estimates_lang(
-    idata: az.InferenceData,
-    groups: list[str],
-    file: Path | str = Path("img", "estimates-lang.png"),
+def plot_proportions(
+    data: pl.DataFrame,
+    file: Path | str = Path("img", "spp-lang.png"),
 ):
     """Plot model estimations for each language."""
-    data = (
-        pl.from_pandas(az.summary(idata, hdi_prob=0.89).reset_index())
-        .with_columns(
-            pl.col("index").str.replace_all("\\[|alpha|\\]", ""),
-            pl.col(pl.Float64).map_elements(model.invlogit, return_dtype=pl.Float64),
-        )
-        .filter(pl.col("index").is_in(groups))
-        .join(
-            scraping.get_languages().rename({"iso639p3code": "index"}),
-            on="index",
-        )
-        .sort("mean", descending=True)
-    )
-    colors = get_color_codes(data["index"])
+
+    d = data.sort("prop", descending=True)
+    d2 = d.slice(0, len(data) // 2)
+    d1 = d.slice(len(d2), len(d) - len(d2))
+
+    colors = get_color_codes()
     fig, axes = plt.subplots(ncols=2, figsize=(13, 10))
-    data2 = data.slice(0, len(data) // 2)
-    data1 = data.slice(len(data2), len(data) - len(data2))
-    for ax, d in zip(axes, (data1, data2)):
-        for i, m, lo, hi in zip(d["index"], d["mean"], d["hdi_5.5%"], d["hdi_94.5%"]):
-            ax.errorbar(m, i, xerr=(hi - lo) / 2, lw=2, c=colors[i], fmt="none")
-            ax.scatter(m, i, marker="d", c=colors[i])
-            ax.scatter(0.51, i, c=colors[i])
-            label = f"{m:.1%} [{lo:.1%}, {hi:.1%}]"
-            ax.text(0.53, i, s=label, fontsize=4.5, backgroundcolor="#ffffff80")
-        texts = {
-            f["index"]: f["language_name"]
-            for f in d.select(["index", "language_name"]).to_dicts()
-        }
+    for ax, d in zip(axes, (d1, d2)):
+        for di in d.to_dicts():
+            ax.scatter(0.51, di["lang"], c=colors[di["family_name"]])
+            ax.scatter(di["prop"], di["lang"], marker="d", c=colors[di["family_name"]])
+            label = f"{di["prop"]:.2%}"
+            ax.text(
+                0.53, di["lang"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
+            )
+        texts = {f["lang"]: f["language_name"] for f in d.to_dicts()}
         ax.set_yticklabels(labels=[texts[t.get_text()] for t in ax.get_yticklabels()])
         ax.yaxis.set_tick_params(labelsize=7)
         ax.set_xlim(0.5, 1.0)
@@ -102,49 +90,31 @@ def plot_estimates_lang(
 
 def plot_estimates(
     idata: az.InferenceData,
-    groups: list[str],
-    group_var: str = "lang",
+    data: pl.DataFrame = None,
     file: Path | str = Path("img", "estimates.png"),
-    **kwargs,
 ):
-    cols_keep = ["index", "family_name", "language_name"]
-    if group_var in cols_keep:
-        cols_keep.remove(group_var)
-    data = (
-        pl.from_pandas(az.summary(idata, hdi_prob=0.89).reset_index())
-        .with_columns(
-            pl.col("index").str.replace_all("\\[|alpha|\\]", ""),
-            pl.col(pl.Float64).map_elements(model.invlogit, return_dtype=pl.Float64),
-        )
-        .filter(pl.col("index").is_in(groups))
-        .join(
-            scraping.get_languages()
-            .rename({"iso639p3code": "lang"})
-            .rename({group_var: "index"})
-            .select(pl.col(cols_keep)),
-            on="index",
-        )
-        .sort("mean", descending=True)
-    )
-    var = "family_name" if group_var == "lang" else "index"
-    colors = get_color_codes(data[var])
-    fig, ax = plt.subplots(ncol=2 if var == "lang" else 1, **kwargs)
+
+    p = model.summarize_posterior(idata)
+    colors = get_color_codes()
+    fig, ax = plt.subplots(figsize=(6, 5))
+    err = (p["upper"] - p["lower"]) / 2
     ax.errorbar(
-        x=data["mean"],
-        y=data["index"],
-        xerr=(data["hdi_94.5%"] - data["hdi_5.5%"]) / 2,
-        lw=2,
-        c="#333232",
-        fmt="none",
+        x=p["mean"], y=p["family_name"], xerr=err, lw=2, c="#333232", fmt="none"
     )
-    ax.scatter(data["mean"], data["index"], c="#333232", marker="d")
+    ax.scatter(p["mean"], p["family_name"], marker="s", c="#333232")
     ax.scatter(
-        np.repeat(0.51, len(data)),
-        data["index"],
-        c=[colors[f] for f in data[var]],
+        np.repeat(0.51, len(p)),
+        p["family_name"],
+        c=[colors[f] for f in p["family_name"]],
     )
-    texts = {f["index"]: f[var] for f in data.select(cols_keep).to_dicts()}
-    ax.set_yticklabels(labels=[texts[t.get_text()] for t in ax.get_yticklabels()])
+    for d in p.to_dicts():
+        label = f"{d["mean"]:.1%} [{d["lower"]:.1%}, {d["upper"]:.1%}]"
+        ax.text(
+            0.53, d["family_name"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
+        )
+    if data is not None:
+        for f, prop in zip(data["family_name"], data["prop"]):
+            ax.scatter(prop, f, marker="|", c=colors[f], alpha=0.5, zorder=5)
     ax.yaxis.set_tick_params(labelsize=7)
     ax.set_xlim(0.5, 1.0)
     ax.grid(True, axis="x", ls=":")
@@ -177,23 +147,24 @@ def plot_map():
     m.drawmapboundary(fill_color="white", linewidth=0)
     m.drawcoastlines(color="#cccccc")
     m.fillcontinents(color="#cccccc")
-    colors = get_color_codes(df["family_name"], alpha=1 / 2)
+    colors = get_color_codes(alpha=1 / 2)
 
     # plot populations
     for fam, col in colors.items():
         d = df.filter(pl.col("family_name") == fam)
-        x, y = m(d["longitude"], d["latitude"])
-        m.scatter(
-            x,
-            y,
-            marker="o",
-            s=(d["pop_size"] / 1e3).sqrt(),
-            c=col,
-            zorder=4,
-            lw=0,
-            label=fam,
-            ax=ax,
-        )
+        if len(d) > 0:
+            x, y = m(d["longitude"], d["latitude"])
+            m.scatter(
+                x,
+                y,
+                marker="o",
+                s=(d["pop_size"] / 1e3).sqrt(),
+                c=col,
+                zorder=4,
+                lw=0,
+                label=fam,
+                ax=ax,
+            )
     legend_fam = ax.legend(
         markerscale=0.5,
         bbox_to_anchor=(1.0, 1),
@@ -273,7 +244,7 @@ def plot_map():
         x,
         y,
         marker="o",
-        s=1/2,
+        s=1 / 2,
         c="#333232",
         zorder=5,
     )

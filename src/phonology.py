@@ -177,7 +177,7 @@ def add_language_col(x: pl.DataFrame, lang: str):
     )
 
 
-def get_corpora(
+def preprocess_langs(
     inpath: Path = Path("data", "raw"),
     outpath: Path = Path("data", "processed"),
     min_words: int = 100,
@@ -213,6 +213,6 @@ def get_corpora(
 
 
 if __name__ == "__main__":
-    WORDS, SYLL = get_corpora()
+    WORDS, SYLL = preprocess_langs()
     cast_to_str(WORDS).write_csv(Path("out", "words.csv"))
     cast_to_str(SYLL).write_csv(Path("out", "syllables.csv"))

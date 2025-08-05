@@ -2843,6 +2843,7 @@ dependencies = [
     { name = "pymc" },
     { name = "rich" },
     { name = "wikipron" },
+    { name = "xarray" },
 ]
 
 [package.metadata]
@@ -2857,6 +2858,7 @@ requires-dist = [
     { name = "pymc", specifier = ">=5.25.1" },
     { name = "rich", specifier = ">=14.1.0" },
     { name = "wikipron", specifier = ">=1.3.3" },
+    { name = "xarray", specifier = ">=2025.7.1" },
 ]
 
 [[package]]

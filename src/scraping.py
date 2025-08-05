@@ -7,7 +7,9 @@ import lingtypology
 import wikipron
 from rich.console import Console
 
-con = Console()
+CON = Console()
+PHOIBLE = lingtypology.datasets.Phoible().get_df()
+GLOTTO = lingtypology.glottolog.glottolog
 
 
 def add_missing_headers(path: Path = Path("data", "raw")):
@@ -58,14 +60,21 @@ def get_lang_populations(
     )
 
 
-def get_languages() -> pl.DataFrame:
+def get_phoible() -> pl.DataFrame:
+    """Get phonological repertoire size for each language."""
+    phoible = PHOIBLE[["glottocode", "phonemes", "consonants", "vowels"]]
+    names = {"phonemes": "n_phon", "consonants": "n_cons", "vowels": "n_vow"}
+    return pl.from_pandas(phoible).rename(names)
+
+
+def get_glottolog() -> pl.DataFrame:
     """Get available languages in Glottolog.
 
     Returns:
         pl.DataFrame: Available languages in Glottolog.
     """
     return (
-        pl.DataFrame(lingtypology.glottolog.glottolog)
+        pl.DataFrame(GLOTTO)
         .rename(lambda x: x.lower())
         .filter(pl.col("status") != "Extinct")
         .drop_nulls("iso639p3code")
@@ -75,13 +84,15 @@ def get_languages() -> pl.DataFrame:
             .otherwise("family_name")
             .alias("family_name")
         )
-        .join(get_lang_populations(), on=["iso639p3code"])
     )
 
 
-def get_lang_name(iso: str):
-    """Classify language family based on Glottolog."""
-    return lingtypology.glottolog.get_by_iso(iso)
+def get_languages() -> pl.DataFrame:
+    return (
+        get_glottolog()
+        .join(get_phoible(), on=["glottocode"], how="left")
+        .join(get_lang_populations(), on=["iso639p3code"], how="left")
+    )
 
 
 class EmptyLanguage(Exception):
@@ -110,7 +121,7 @@ def _scrape_lang_wrapper(
             i += 1
     if i == 0:
         raise EmptyLanguage()
-    con.print(f"\t[green]{lang}: {i} pronunciations found[/green]")
+    CON.print(f"\t[green]{lang}: {i} pronunciations found[/green]")
     return None
 
 
@@ -125,16 +136,16 @@ def scrape_lang(lang: str, path: Path = Path("data", "raw")):
         c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
         _scrape_lang_wrapper(lang, c, path)
     except (ValueError, KeyError, FileNotFoundError) as e:
-        con.print(f"[red]{e}[/red]")
+        CON.print(f"[red]{e}[/red]")
     except EmptyLanguage:
-        con.print(f"\t[yellow]{lang}: No broad pronunciations[/yellow]")
+        CON.print(f"\t[yellow]{lang}: No broad pronunciations[/yellow]")
         try:
             c = wikipron.Config(key=lang, syllable_boundaries=True, stress=True)
             _scrape_lang_wrapper(lang, c, path)
         except EmptyLanguage:
-            con.print(f"\t[red]{lang}: No narrow pronunciations[/red]")
+            CON.print(f"\t[red]{lang}: No narrow pronunciations[/red]")
         except (ValueError, KeyError, FileNotFoundError) as e:
-            con.print(f"[red]{e}[/red]")
+            CON.print(f"[red]{e}[/red]")
 
 
 def get_scraped_languages(
@@ -164,7 +175,7 @@ def scrape_all_languages():
     langs = sorted([la for la in langs if la not in get_scraped_languages()])
     for i, la in enumerate(langs):
         time = datetime.now().strftime("%Y-%m-%d %H:%M")
-        con.print(f"[{i + 1}/{len(langs)}] {la} ({time})")
+        CON.print(f"[{i + 1}/{len(langs)}] {la} ({time})")
         scrape_lang(la)
 
 
