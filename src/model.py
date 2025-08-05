@@ -1,11 +1,12 @@
 """Model SSP data."""
 
+from pathlib import Path
 from functools import lru_cache
 import numpy as np
 import polars as pl
 import pymc as pm
+from pytensor import tensor as pt
 import arviz as az
-import xarray as xr
 from scipy.stats import gaussian_kde
 from src import scraping
 
@@ -82,8 +83,10 @@ def proportion_by(data: pl.DataFrame, by: str = None) -> pl.DataFrame:
 def fit_model(
     data: pl.DataFrame,
     y_var: str = "sum",
+    pred_var: str = None,
     group_var: str = "family_name",
     nsamples: int = 4_000,
+    file: str | Path = None,
 ) -> tuple:
     """Fit multilevel Bayesian model.
 
@@ -95,60 +98,30 @@ def fit_model(
     Returns:
         tuple: Model, inference data, and likelihood.
     """
+    if file is None:
+        fn = f"model_{pred_var}.nc" if pred_var else "model_base.nc"
+        file = Path("out", fn)
     y = data.get_column(y_var).to_numpy()
     n = data.get_column("n").to_numpy()
     groups = data.get_column(group_var).to_numpy()
     groups_fact = np.unique(np.arange(len(groups)), return_inverse=True)[1]
+    if pred_var:
+        x = data.get_column(pred_var).to_numpy()
+        x_std = (x - x.mean()) / x.std()
     with pm.Model(coords={"group": groups}) as m:
         group_idx = pm.Data("group_idx", groups_fact, dims="obs_id")
         mu_a = pm.Normal("mu_a", mu=0, sigma=1)
         sigma_a = pm.Exponential("sigma_a", 4)
         theta = pm.Normal("theta", mu=mu_a, sigma=sigma_a, dims="group")
-        p = pm.math.invlogit(theta[group_idx])
+        if pred_var:
+            beta = pm.Normal("beta", mu=0.0, sigma=10.0)
+            p = pm.Deterministic("p", pm.math.invlogit(theta[group_idx] + beta * x_std))
+        else:
+            p = pm.Deterministic("p", pm.math.invlogit(theta[group_idx]))
         y_pred = pm.Binomial("y_pred", n=n, p=p, observed=y, dims="obs_id")
         prior = pm.sample_prior_predictive(samples=nsamples)
-        trace = pm.sample(
-            nsamples // 2, tune=nsamples // 2, idata_kwargs={"log_likelihood": True}
-        )
-    return data, m, trace, prior, y_pred
-
-
-def fit_model_pred(
-    data: pl.DataFrame,
-    pred_var: str,
-    y_var: str = "sum",
-    group_var: str = "family_name",
-    nsamples: int = 4_000,
-) -> tuple:
-    """Fit multilevel Bayesian model.
-
-    Args:
-        data (pl.DataFrame): Dataset with response variable and predictors.
-        y_var (str, optional): Name of the response variable in the DataFrame. Defaults to "prop_sspp".
-        group_var (str, optional): Name of the grouping variable in the DataFrame. Degaults to "lang".
-
-    Returns:
-        tuple: Model, inference data, and likelihood.
-    """
-    y = data.get_column(y_var).to_numpy()
-    n = data.get_column("n").to_numpy()
-    x = data.get_column(pred_var).to_numpy()
-    x_std = (x - x.mean()) / x.std()
-    groups = data.get_column(group_var).to_numpy()
-    groups_fact = np.unique(np.arange(len(groups)), return_inverse=True)[1]
-
-    with pm.Model(coords={"group": groups}) as m:
-        group_idx = pm.Data("group_idx", groups_fact, dims="obs_id")
-        mu_a = pm.Normal("mu_a", mu=0.0, sigma=1.0)
-        sigma_a = pm.Exponential("sigma_a", 4.0)
-        theta = pm.Normal("theta", mu=mu_a, sigma=sigma_a, dims="group")
-        beta = pm.Normal("beta", mu=0.0, sigma=10.0)
-        p = pm.math.invlogit(theta[group_idx] + beta * x_std)
-        y_pred = pm.Binomial("y_pred", n=n, p=p, observed=y, dims="obs_id")
-        prior = pm.sample_prior_predictive(samples=nsamples)
-        trace = pm.sample(
-            nsamples // 2, tune=nsamples // 2, idata_kwargs={"log_likelihood": True}
-        )
+        kw = {"log_likelihood": True}
+        trace = pm.sample(nsamples // 2, tune=nsamples // 2, idata_kwargs=kw)
     return data, m, trace, prior, y_pred
 
 
@@ -188,5 +161,6 @@ def summarize_posterior(idata: az.InferenceData) -> pl.DataFrame:
     return p
 
 
-def compare_models(x: az.InferenceData, y: az.InferenceData):
-    return az.compare({"model_0": x, "model_1": y}, method="BB-pseudo-BMA")
+def compare_models(x: dict[str, az.InferenceData]):
+    models = {k: v[2] for k, v in x.items()}
+    return az.compare(models, method="BB-pseudo-BMA")

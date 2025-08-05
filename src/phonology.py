@@ -1,6 +1,7 @@
 """Preprocess Wiktionary corpora."""
 
 from pathlib import Path
+from functools import lru_cache
 from itertools import groupby
 import polars as pl
 import numpy as np
@@ -177,6 +178,7 @@ def add_language_col(x: pl.DataFrame, lang: str):
     )
 
 
+@lru_cache
 def preprocess_langs(
     inpath: Path = Path("data", "raw"),
     outpath: Path = Path("data", "processed"),

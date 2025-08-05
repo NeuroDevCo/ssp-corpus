@@ -4,6 +4,7 @@
 ```{python}
 import sys
 from pathlib import Path
+from great_tables import GT, md, html
 import polars as pl
 from matplotlib import pyplot as plt
 from src import scraping
@@ -52,19 +53,38 @@ We used a multilevel, Bayesian logistic regression model to estimate the proport
 
 $$
 \begin{aligned}
-\textbf{Linear regression model:} \\
-\log(\frac{\theta}{1 - \theta}) &= \alpha_{i} \\
-\alpha_{i} &\sim \mathcal{N}(\mu_{i}, \sigma_{i}) \\
-&\text{where}~i~\text{represents each language or language family} \\
-\\
-\textbf{Prior:} \\
-\mu_i &= \mathcal{N}(0, 1) \\
-\sigma_i &= \text{Exponential}(4)
+y_{[j]i} &\sim \text{Binomial}(n_i, \frac{\theta_{[j]i}}{1 - \theta_{[j]i}}) \\
+\theta_{j} &= \alpha_j + \beta \cdot x_i \\
+\alpha_{j} &\sim \mathcal{N}(\mu_j, \sigma_j) \\
+\text{where:} \\
+&i~\text{represents each observation, corresponding to a language} \\
+&j~\text{represents each language family} \\
+&y_{[j]i}~\text{is the number of syllables in language}~i~{that follow SSP} \\
+&n_j~\text{is the number of syllables total language}~i \\
+\mu_j &\sim \mathcal{N}(0, 1) \\
+\sigma_j &\sim \text{Exponential}(4)
 \end{aligned}
 $$ {#eq-model}
 
 ## Results
 
-![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language, with a color-coded dot next to it indicatin gthe language family it belongs to (see @fig-map) for reference. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language, and its 89% highest density interval (HDI). The 89% HDI indicates is the range of consecutive values that contains the true value of the proportion with 89% probability, given the observed data and specified model. Means and 89% HDI are also numerically reported next to each language.](../img/estimates-lang.png){#fig-estimates-lang}
+### Estimating the prevalence of the SSP across languages
 
-![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 89% highest density interval (HDI). Means and 89% HDI are also numerically reported next to each language family.](../img/estimates-family.png){#fig-estimates-family}
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language, with a color-coded dot next to it indicatin gthe language family it belongs to (see @fig-map) for reference. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language, and its 89% highest density interval (HDI). The 89% HDI indicates is the range of consecutive values that contains the true value of the proportion with 89% probability, given the observed data and specified model. Means and 89% HDI are also numerically reported next to each language.](../img/ssp-lang.png){#fig-estimates-lang}
+
+
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 89% highest density interval (HDI). Means and 89% HDI are also numerically reported next to each language family.](../img/estimates.png){#fig-estimates-family}
+
+### Estimating the association between SSP prevalence and phonemic inventory size
+
+```{python}
+#| label: tbl-comparisons
+#| tbl-cap: "Bayesian Model Averaging (BMA) comparisons."
+#| output: asis
+comp = pl.read_csv(Path("out", "comparisons.csv")).with_columns(pl.col("rank").cast(pl.String).map_elements(lambda x: "Model " + x, return_dtype=pl.String), pl.col(pl.Float64).round(2)).select(["rank", "elpd_loo", "p_loo", "elpd_diff", "se", "weight"])
+tbl = (GT(comp).cols_label(rank="", elpd_loo = "ELPD LOO", p_loo = "*p* LOO", elpd_diff = "ELPD diff.", se = "SE", weight = "Weight"))
+
+print(tbl.as_latex())
+```
+
+# References

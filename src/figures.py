@@ -3,6 +3,7 @@
 from pathlib import Path
 import polars as pl
 import numpy as np
+import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib import colors as cm
 from matplotlib.ticker import FuncFormatter
@@ -60,7 +61,7 @@ def plot_n_words(
 
 def plot_proportions(
     data: pl.DataFrame,
-    file: Path | str = Path("img", "spp-lang.png"),
+    file: Path | str = Path("img", "ssp-lang.png"),
 ):
     """Plot model estimations for each language."""
 
@@ -121,6 +122,25 @@ def plot_estimates(
     fig.tight_layout()
     if file:
         fig.savefig(file, dpi=1e3, bbox_inches="tight")
+
+
+def plot_epreds(idata: az.InferenceData, data: pl.DataFrame, pred_var: str):
+    post_mean = idata.posterior.mean(dim=("chain", "draw"))
+    x = data.get_column(pred_var).to_numpy()
+    x_std = (x - x.mean()) / x.std()
+    y_obs = data.get_column("prop").to_numpy()
+    fig, ax = plt.subplots(figsize=(7, 7))
+    x_plot = xr.DataArray(np.linspace(x_std.min(), x_std.max(), 100))
+    y_plot = post_mean["beta"] * x_plot + post_mean["p"]
+    Line2 = ax.plot(x_plot, model.invlogit(y_plot), color="grey", alpha=0.5)
+    Line1 = ax.scatter(x_std, y_obs)
+    ax.set_ylim(0, 1)
+    ax.set(title="Posterior predictive regression lines", xlabel="x", ylabel="y")
+    ax.legend(
+        handles=[Line1[0], Line2[0]],
+        labels=["predicted average", "inferred regression line"],
+        loc=0,
+    )
 
 
 def plot_map():
