@@ -4,10 +4,10 @@
 ```{python}
 import sys
 from pathlib import Path
-from great_tables import GT, md, html
+from great_tables import GT, md, html, from_column, style, loc
 import polars as pl
 from matplotlib import pyplot as plt
-from src import scraping
+from src import scraping, figures
 ```
 
 ### Dataset acquisition
@@ -17,6 +17,7 @@ glotto = scraping.get_languages()
 scraped = scraping.get_scraped_languages()
 words = pl.read_csv(Path("out", "words.csv"))
 syllables = pl.read_csv(Path("out", "syllables.csv"))
+data = pl.read_csv(Path("out", "data.csv"))
 languages = (
     words.group_by("lang")
     .agg(pl.len().alias("n"))
@@ -49,18 +50,19 @@ For each language, and for each retrieved pronunciation, we chunked the phonolog
 
 ## Data analysis
 
-We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. First, we fit a model that estimated the average probability of the syllables of each language following the SSP. This model included each language as a group with a random intercept. Second, we fit a model that estimated the average probability of the syllables of language family following the SSP. This model included each language as a group, also with a random intercept. @eq-model shows a detailed implementation of both models model. We implemented the model in Python 3.12.7 using the PyMC package [@abril2023pymc], with four Monte Carlo chains, each with 2,000 iterations. Model diagnostics and posterior distribution preprocessing were conducted using the ArViZ Python package [@kumar2019arviz]. 
+We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. This model estimated the average probability of the syllables of language family following the SSP. This model included each family language as a group with a random intercept. @eq-model shows a detailed implementation of both models model. We implemented the model in the probabilistic programming language Stan [@carpenter2017stan] and CmdStanPy, its interface to its Python (3.12.7). We run eight Hamiltonian Monte Carlo chain of 8,000 iterations each (4,000 were warm-up iterations) to estimate the posterior distribution of the model. Model diagnostics and posterior distribution preprocessing were conducted using the ArViZ Python package [@kumar2019arviz]. 
 
 $$
 \begin{aligned}
+\textbf{Likelihood:} \\
 y_{[j]i} &\sim \text{Binomial}(n_i, \frac{\theta_{[j]i}}{1 - \theta_{[j]i}}) \\
-\theta_{j} &= \alpha_j + \beta \cdot x_i \\
-\alpha_{j} &\sim \mathcal{N}(\mu_j, \sigma_j) \\
+\theta_{j[i]} &\sim \mathcal{N}(\mu_j, \sigma_j) \\
 \text{where:} \\
 &i~\text{represents each observation, corresponding to a language} \\
 &j~\text{represents each language family} \\
-&y_{[j]i}~\text{is the number of syllables in language}~i~{that follow SSP} \\
+&y_{[j]i}~\text{is the number of syllables in language}~i~\text{that follow SSP} \\
 &n_j~\text{is the number of syllables total language}~i \\
+\textbf{Prior:}
 \mu_j &\sim \mathcal{N}(0, 1) \\
 \sigma_j &\sim \text{Exponential}(4)
 \end{aligned}
@@ -68,23 +70,44 @@ $$ {#eq-model}
 
 ## Results
 
-### Estimating the prevalence of the SSP across languages
-
-![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language, with a color-coded dot next to it indicatin gthe language family it belongs to (see @fig-map) for reference. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language, and its 89% highest density interval (HDI). The 89% HDI indicates is the range of consecutive values that contains the true value of the proportion with 89% probability, given the observed data and specified model. Means and 89% HDI are also numerically reported next to each language.](../img/ssp-lang.png){#fig-estimates-lang}
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 95% highest density interval (HDI). Means and 95% HDI are also numerically reported next to each language family.](../img/estimates.png){#fig-estimates-family}
 
 
-![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 89% highest density interval (HDI). Means and 89% HDI are also numerically reported next to each language family.](../img/estimates.png){#fig-estimates-family}
-
-### Estimating the association between SSP prevalence and phonemic inventory size
+# Appendix
 
 ```{python}
-#| label: tbl-comparisons
-#| tbl-cap: "Bayesian Model Averaging (BMA) comparisons."
-#| output: asis
-comp = pl.read_csv(Path("out", "comparisons.csv")).with_columns(pl.col("rank").cast(pl.String).map_elements(lambda x: "Model " + x, return_dtype=pl.String), pl.col(pl.Float64).round(2)).select(["rank", "elpd_loo", "p_loo", "elpd_diff", "se", "weight"])
-tbl = (GT(comp).cols_label(rank="", elpd_loo = "ELPD LOO", p_loo = "*p* LOO", elpd_diff = "ELPD diff.", se = "SE", weight = "Weight"))
+# | label: tbl-proportions
+# | tbl-cap: "Observed proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language."
 
-print(tbl.as_latex())
+npron = words.group_by("lang").agg(pl.len().alias("n_pron"))
+tbl = (
+    data.join(npron, on="lang")
+    .with_columns(
+        pl.col("family_name")
+        .replace_strict(figures.get_color_codes(), default="black")
+        .alias("color"),
+    )
+    .select(["language_name", "family_name", "n_pron", "n", "prop", "color"])
+    .sort("family_name")
+)
+
+(
+    GT(tbl)
+    .fmt_percent(columns=["prop"])
+    .fmt_integer(columns=["n", "n_pron"])
+    .tab_style(style=style.text(size="small"), locations=loc.body())
+    .cols_label(
+        {
+            "language_name": "Language",
+            "family_name": "Language family",
+            "prop": "SSP (%)",
+            "n_pron": "# Words",
+            "n": "# Syllables",
+        }
+    )
+    .cols_hide(["color"])
+)
 ```
+
 
 # References

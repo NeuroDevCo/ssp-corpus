@@ -6,30 +6,27 @@ from src import phonology, figures, model, scraping
 
 
 def main():
+    """Main script."""
     langs = scraping.get_languages().rename({"iso639p3code": "lang"})
-    words, syll = phonology.preprocess_langs()
-    data = model.proportion_by(syll, by=["lang", "language_name", "family_name"])
-    data.write_csv(Path("out", "data.csv"))
+    words, syll = phonology.preprocess_languages()
 
-    data_preds = data.join(
-        langs.select(["lang", "n_phon", "n_vow", "n_cons"]), on="lang", how="left"
-    ).drop_nulls()
+    data = phonology.proportion_by(
+        syll, by=["lang", "language_name", "family_name"]
+    ).filter(pl.col("family_name") != "Bookkeeping")
+    fit, standata = model.fit_model(data)
+    posterior = model.summarize_posterior(fit, standata)
 
-    models = {
-        "results_base": model.fit_model(data_preds),
-        "results_phon": model.fit_model(data_preds, pred_var="n_phon"),
-        "results_cons": model.fit_model(data_preds, pred_var="n_cons"),
-        "results_vow": model.fit_model(data_preds, pred_var="n_vow"),
-    }
-    comp = pl.from_pandas(model.compare_models(models)).write_csv(
-        Path("out", "comparisons.csv")
-    )
-    comp.write_csv()
+    figures.plot_map(words)
     figures.plot_proportions(data)
-    figures.plot_map()
+    figures.plot_estimates(data, posterior, file=Path("img", "estimates.png"))
 
-    return langs, words, syll, data, models, comp
+    phonology.cast_to_str(words).write_csv(Path("out", "words.csv"))
+    phonology.cast_to_str(syll).write_csv(Path("out", "syllables.csv"))
+    data.write_csv(Path("out", "data.csv"))
+    posterior.write_csv(Path("out", "posterior.csv"))
+
+    return langs, words, syll, data, posterior
 
 
 if __name__ == "__main__":
-    LANGS, WORDS, SYLL, DATA, RESULTS, COMP = main()
+    LANGS, WORDS, SYLL, DATA, POST = main()

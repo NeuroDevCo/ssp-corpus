@@ -1,13 +1,16 @@
 """Preprocess Wiktionary corpora."""
 
 from pathlib import Path
-from functools import lru_cache
+from typing import Union
+from functools import cache
 from itertools import groupby
 import polars as pl
 import numpy as np
 from panphon import FeatureTable, sonority
 from rich.progress import track
 from src import scraping
+from src.utils import benchmark
+
 
 FT = FeatureTable()
 S = sonority.Sonority()
@@ -41,7 +44,7 @@ def count_clusters(x: str, symbol: str = "V") -> int:
     return len([b for a, b in groupby(x) if a == symbol])
 
 
-def has_one_peak(x: list[int] or np.array) -> bool:
+def has_one_peak(x: Union[list[int], np.array]) -> bool:
     """Check if only has one maximum.
 
     Args:
@@ -178,8 +181,38 @@ def add_language_col(x: pl.DataFrame, lang: str):
     )
 
 
-@lru_cache
-def preprocess_langs(
+def proportion_by(data: pl.DataFrame, by: str = None) -> pl.DataFrame:
+    """Aggregate data to get the proportion of SSP vollowing syllables by group (e.g., language family).
+
+    Args:
+        data (pl.Dataframe): Data to aggregate.
+        by (list[str], optional): Variables to aggregate by. Defaults to ``["lang", "family_name", "language_name"]``.
+
+    Returns:
+        pl.DataFrame: Aggregated dataset.
+    """
+    if by is None:
+        by = ["lang", "family_name", "language_name"]
+    langs = (
+        scraping.get_languages()
+        .rename({"iso639p3code": "lang"})
+        .select(pl.col(["lang", "family_name", "language_name"]))
+    )
+    return (
+        data.join(langs, on="lang")
+        .drop_nulls(["family_name"])
+        .group_by(by)
+        .agg(
+            pl.len().alias("n"),
+            pl.mean("is_ssp").alias("prop"),
+            pl.sum("is_ssp").alias("sum"),
+        )
+    )
+
+
+@cache
+@benchmark
+def preprocess_languages(
     inpath: Path = Path("data", "raw"),
     outpath: Path = Path("data", "processed"),
     min_words: int = 100,
@@ -190,7 +223,7 @@ def preprocess_langs(
     words, syll = [], []
     lang_list = scraping.get_scraped_languages(path=inpath)
     files = [inpath / (la + ".csv") for la in lang_list]
-    for f in track(files, total=len(files)):
+    for f in track(files, f"Preprocessing {len(files)} languages", len(files)):
         lang = f.name.rsplit(".", maxsplit=1)[0]
         try:
             # process words
@@ -215,6 +248,6 @@ def preprocess_langs(
 
 
 if __name__ == "__main__":
-    WORDS, SYLL = preprocess_langs()
+    WORDS, SYLL = preprocess_languages()
     cast_to_str(WORDS).write_csv(Path("out", "words.csv"))
     cast_to_str(SYLL).write_csv(Path("out", "syllables.csv"))

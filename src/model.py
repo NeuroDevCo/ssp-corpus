@@ -1,165 +1,118 @@
-"""Model SSP data."""
+"""Model SSP prevalence."""
 
 from pathlib import Path
-from functools import lru_cache
 import numpy as np
 import polars as pl
-import pymc as pm
+from cmdstanpy import CmdStanModel, stanfit
 import arviz as az
-from scipy.stats import gaussian_kde
-from src import scraping
 
 RANDOM_SEED = 1234
 rng = np.random.default_rng(RANDOM_SEED)
 
 
-def hdi(sample, alpha=0.05, roundto=2):
-    """Calculate highest posterior density (HPD) of array for given alpha.
-    The HPD is the minimum width Bayesian credible interval (BCI).
-    The function works for multimodal distributions, returning more than one mode
-
-    Note:
-        Taken from https://github.com/aloctavodia/BAP/blob/master/first_edition/code/Chp1/hpd.py
+def get_group_indices(x: list[str]) -> dict[str, int]:
+    """Assign integer indicaes to each group.
 
     Args:
-        sample (np.ndarray | list): An array containing MCMC samples.
-        alpha (float, optional): Desired probability of type I error. Defaults to 0.05.
-        roundto (int): Number of digits after the decimal point for the results. Defaults to 2.
+        data (list[str]): List of values to recode.
 
     Returns:
-        hpd: array with the lower
-    """  # pylint: disable=line-too-long
-    sample = sample[~np.isnan(np.asarray(sample))]
-    # get upper and lower bounds
-    lo, up = np.min(sample), np.max(sample)
-    density = gaussian_kde(sample)
-    x = np.linspace(lo, up, 2000)
-    y = density.evaluate(x)
-    xy_zipped = zip(x, y / np.sum(y))
-    xy = sorted(xy_zipped, key=lambda x: x[1], reverse=True)
-    xy_cum_sum = 0
-    hdv = []
-    for val in xy:
-        xy_cum_sum += val[1]
-        hdv.append(val[0])
-        if xy_cum_sum >= (1 - alpha):
-            break
-    hdv.sort()
-    diff = (up - lo) / 20  # differences of 5%
-    hpd = []
-    hpd.append(round(min(hdv), roundto))
-    for i in range(1, len(hdv)):
-        if hdv[i] - hdv[i - 1] >= diff:
-            hpd.append(round(hdv[i - 1], roundto))
-            hpd.append(round(hdv[i], roundto))
-    hpd.append(round(max(hdv), roundto))
-    ite = iter(hpd)
-    hpd = list(zip(ite, ite))
-    return hpd
-
-
-def proportion_by(data: pl.DataFrame, by: str = None) -> pl.DataFrame:
-    """Get proportion by group."""
-    if by is None:
-        by = ["lang", "family_name", "language_name"]
-    langs = (
-        scraping.get_languages()
-        .rename({"iso639p3code": "lang"})
-        .select(pl.col(["lang", "family_name", "language_name"]))
-    )
-    return (
-        data.join(langs, on="lang")
-        .drop_nulls(["family_name"])
-        .group_by(by)
-        .agg(
-            pl.len().alias("n"),
-            pl.mean("is_ssp").alias("prop"),
-            pl.sum("is_ssp").alias("sum"),
-        )
-    )
+        dict[str, int]: Recoded values.
+    """
+    vals = sorted(list(set(x)))
+    return dict(zip(vals, range(1, len(vals) + 1)))
 
 
 def fit_model(
     data: pl.DataFrame,
     y_var: str = "sum",
-    pred_var: str = None,
+    n_var: str = "n",
     group_var: str = "family_name",
-    nsamples: int = 4_000,
-    file: str | Path = None,
-) -> tuple:
-    """Fit multilevel Bayesian model.
+    n_samples: int = 4_000,
+    n_chains: int = 8,
+    file: str | Path = Path("model", "model.stan"),
+    outpath: str | Path = None,
+    **kwargs,
+) -> stanfit.CmdStanMCMC:
+    """Fit Bayesian multilevel model with a Binomial distribution in CmdStanPy.
 
     Args:
-        data (pl.DataFrame): Dataset with response variable and predictors.
-        y_var (str, optional): Name of the response variable in the DataFrame. Defaults to "prop_sspp".
-        group_var (str, optional): Name of the grouping variable in the DataFrame. Degaults to "lang".
+        data (pl.DataFrame): Data to model.
+        y_var (str, optional): Name of the response variable in ``data``. Defaults to "sum".
+        n_var (str, optional): Name of the variable with number of trials in ``data``. Defaults to "n".capitalize
+        group_var (str, optional): Name of the grouping variable in ``data``. Defaults to "lang".
+        n_samples (int, optional): Total number of samples per MCMC chain. Defaults to 4_000.
+        n_chains (int, optional): Number of MCMC chains to run. Defaults to 8.
+        file (str | Path): Path to the Stan file with the model. Defaults to ``Path("model", "model.stan")``.
+        outpath (str, optional): Path to the directory where the posterior samples of the model will be saved. Defaults to None.
+        **kwargs: Additional arguments passed to the sampler.
 
     Returns:
-        tuple: Model, inference data, and likelihood.
+        stanfit.CmdStanMCMC: Posterior MCMC samples.
+        dict: Stan data.
     """
-    if file is None:
-        fn = f"model_{pred_var}.nc" if pred_var else "model_base.nc"
-        file = Path("out", fn)
-    y = data.get_column(y_var).to_numpy()
-    n = data.get_column("n").to_numpy()
-    groups = data.get_column(group_var).to_numpy()
-    groups_fact = np.unique(np.arange(len(groups)), return_inverse=True)[1]
-    if pred_var:
-        x = data.get_column(pred_var).to_numpy()
-        x_std = (x - x.mean()) / x.std()
-    with pm.Model(coords={"group": groups}) as m:
-        group_idx = pm.Data("group_idx", groups_fact, dims="obs_id")
-        mu_a = pm.Normal("mu_a", mu=0, sigma=1)
-        sigma_a = pm.Exponential("sigma_a", 4)
-        theta = pm.Normal("theta", mu=mu_a, sigma=sigma_a, dims="group")
-        if pred_var:
-            beta = pm.Normal("beta", mu=0.0, sigma=10.0)
-            p = pm.Deterministic("p", pm.math.invlogit(theta[group_idx] + beta * x_std))
-        else:
-            p = pm.Deterministic("p", pm.math.invlogit(theta[group_idx]))
-        y_pred = pm.Binomial("y_pred", n=n, p=p, observed=y, dims="obs_id")
-        prior = pm.sample_prior_predictive(samples=nsamples)
-        kw = {"log_likelihood": True}
-        trace = pm.sample(nsamples // 2, tune=nsamples // 2, idata_kwargs=kw)
-    return data, m, trace, prior, y_pred
-
-
-def invlogit(x: float) -> float:
-    """Calculate inverse logit function"""
-    odds = np.exp(x)
-    return odds / (1 + odds)
-
-
-@lru_cache
-def summarize_posterior(idata: az.InferenceData) -> pl.DataFrame:
-    d = az.convert_to_dataset(idata).to_dataframe().reset_index()
-    p = (
-        pl.from_pandas(d)
-        .drop_nulls()
-        .rename({"group": "family_name"})
-        .with_columns(
-            pl.col("alpha").map_elements(invlogit, return_dtype=pl.Float64),
-        )
-        .group_by("family_name")
-        .agg(
-            pl.col("alpha").mean().alias("mean"),
-            pl.struct("alpha")
-            .map_batches(
-                lambda x: hdi(x.to_numpy())[0], return_dtype=pl.List(pl.Float64)
-            )
-            .first()
-            .alias("hdi"),
-        )
-        .sort("mean", descending=True)
-        .with_columns(
-            pl.col("hdi").list.first().alias("lower"),
-            pl.col("hdi").list.last().alias("upper"),
-        )
-        .select(["family_name", "mean", "lower", "upper"])
+    d = data.sort("family_name")
+    y, n = [d[v].to_numpy() for v in (y_var, n_var)]
+    lookup = get_group_indices(d[group_var].to_numpy())
+    groups = d[group_var].unique().to_numpy()
+    group_idx = [lookup[g] for g in d[group_var]]
+    d = {
+        "N": len(y),
+        "n": n,
+        "y": y,
+        "J": len(groups),
+        "j": group_idx,
+        "group_labels": lookup,
+    }
+    m = CmdStanModel(stan_file=file)
+    fit = m.sample(
+        data=d,
+        step_size=0.1,
+        iter_sampling=n_samples // 2,
+        iter_warmup=n_samples // 2,
+        seed=RANDOM_SEED,
+        chains=n_chains,
+        parallel_chains=n_chains,
+        **kwargs,
     )
-    return p
+    if outpath:
+        fit.save_csvfiles(outpath)
+    return fit, d
 
 
-def compare_models(x: dict[str, az.InferenceData]):
-    models = {k: v[2] for k, v in x.items()}
-    return az.compare(models, method="BB-pseudo-BMA")
+def summarize_posterior(
+    fit: stanfit.CmdStanMCMC, stan_data: dict, width: float = 0.95
+) -> pl.DataFrame:
+    """Summarize posterior of the model.
+
+    Args:
+        fit (stanfit.CmdStanMCMC): Posterior samples of the mode.
+        stan_data (dict): Stan data.
+        width (float): Confidence level for the intervals.
+
+    Returns:
+        stanfit.CmdStanMCMC: Summarised posterior.
+    """
+    hdi_names = np.array(((1 - width) / 2, 1 - (1 - width) / 2)) * 100
+    hdi_names = np.round(hdi_names, decimals=2)
+    hdi_names = {f"hdi_{h}%": i for h, i in zip(hdi_names, ("lower", "upper"))}
+    idata = az.from_cmdstanpy(fit)
+    p = az.summary(idata, hdi_prob=width, var_names=["theta"])
+    p.reset_index(names="param", inplace=True)
+
+    lookup = {str(v - 1): k for k, v in stan_data["group_labels"].items()}
+    draws = (
+        pl.from_pandas(p)
+        .rename({"hdi_2.5%": "lower", "hdi_97.5%": "upper"})
+        .with_columns(
+            pl.col("param")
+            .str.replace_all("\\[|\\]|theta", "")
+            .replace_strict(lookup, default=None),
+            pl.col(["mean", "sd", "lower", "upper"]).map_elements(
+                lambda x: 1 / (1 + np.exp(-x)), return_dtype=pl.Float64
+            ),
+        )
+        .drop_nulls()
+        .sort("mean", descending=True)
+    )
+    return draws

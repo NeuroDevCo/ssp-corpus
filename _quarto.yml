@@ -7,6 +7,10 @@ title: "Estimating the prevalence of the Sonority Sequencing Principle accross l
 format: pdf
 bibliography: docs/references.bib
 
+mainfont: Arial
+sansfont: Arial
+monofont: Arial
+
 echo: false
 warning: false
 error: false

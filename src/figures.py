@@ -3,12 +3,10 @@
 from pathlib import Path
 import polars as pl
 import numpy as np
-import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib import colors as cm
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.basemap import Basemap
-import arviz as az
 from src import scraping, model
 
 
@@ -52,16 +50,9 @@ def plot_structures(
     return None
 
 
-def plot_n_words(
-    datapath: str | Path = Path("out", "words.csv"),
-    file: str | Path = Path("img", "map.png"),
-):
-    """Plot the distribution of distinct word-forms extracted for each language."""
-
-
 def plot_proportions(
     data: pl.DataFrame,
-    file: Path | str = Path("img", "ssp-lang.png"),
+    file: Path | str = Path("img", "proportions.png"),
 ):
     """Plot model estimations for each language."""
 
@@ -74,7 +65,7 @@ def plot_proportions(
     for ax, d in zip(axes, (d1, d2)):
         for di in d.to_dicts():
             ax.scatter(0.51, di["lang"], c=colors[di["family_name"]])
-            ax.scatter(di["prop"], di["lang"], marker="d", c=colors[di["family_name"]])
+            ax.scatter(di["prop"], di["lang"], marker="o", s=15, c="k")
             label = f"{di["prop"]:.2%}"
             ax.text(
                 0.53, di["lang"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
@@ -90,63 +81,52 @@ def plot_proportions(
 
 
 def plot_estimates(
-    idata: az.InferenceData,
-    data: pl.DataFrame = None,
+    data: pl.DataFrame,
+    posterior: pl.DataFrame,
     file: Path | str = Path("img", "estimates.png"),
 ):
-
-    p = model.summarize_posterior(idata)
+    p = posterior.sort("mean", descending=True)
     colors = get_color_codes()
+
     fig, ax = plt.subplots(figsize=(6, 5))
-    err = (p["upper"] - p["lower"]) / 2
     ax.errorbar(
-        x=p["mean"], y=p["family_name"], xerr=err, lw=2, c="#333232", fmt="none"
+        x=p["mean"],
+        y=p["param"],
+        xerr=(p["upper"] - p["lower"]) / 2,
+        lw=2,
+        c="#333232",
+        fmt="none",
     )
-    ax.scatter(p["mean"], p["family_name"], marker="s", c="#333232")
-    ax.scatter(
-        np.repeat(0.51, len(p)),
-        p["family_name"],
-        c=[colors[f] for f in p["family_name"]],
-    )
+    ax.scatter(p["mean"], p["param"], marker="o", c="#333232", s=15)
+    if data is not None:
+        for f in p["param"]:
+            prop = data.filter(pl.col("family_name") == f)
+            ax.scatter(
+                prop["prop"],
+                prop["family_name"],
+                marker="|",
+                c=colors[f],
+                alpha=0.5,
+                zorder=1,
+            )
+    ax.scatter(np.repeat(0.49, len(p)), p["param"], c=[colors[f] for f in p["param"]])
     for d in p.to_dicts():
         label = f"{d["mean"]:.1%} [{d["lower"]:.1%}, {d["upper"]:.1%}]"
-        ax.text(
-            0.53, d["family_name"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
-        )
-    if data is not None:
-        for f, prop in zip(data["family_name"], data["prop"]):
-            ax.scatter(prop, f, marker="|", c=colors[f], alpha=0.5, zorder=5)
+        ax.text(0.51, d["param"], s=label, fontsize=4.5, backgroundcolor="#ffffff80")
+
     ax.yaxis.set_tick_params(labelsize=7)
-    ax.set_xlim(0.5, 1.0)
+    ax.set_xlim(0.48, 1.0)
     ax.grid(True, axis="x", ls=":")
     fig.tight_layout()
     if file:
         fig.savefig(file, dpi=1e3, bbox_inches="tight")
 
 
-def plot_epreds(idata: az.InferenceData, data: pl.DataFrame, pred_var: str):
-    post_mean = idata.posterior.mean(dim=("chain", "draw"))
-    x = data.get_column(pred_var).to_numpy()
-    x_std = (x - x.mean()) / x.std()
-    y_obs = data.get_column("prop").to_numpy()
-    fig, ax = plt.subplots(figsize=(7, 7))
-    x_plot = xr.DataArray(np.linspace(x_std.min(), x_std.max(), 100))
-    y_plot = post_mean["beta"] * x_plot + post_mean["p"]
-    Line2 = ax.plot(x_plot, model.invlogit(y_plot), color="grey", alpha=0.5)
-    Line1 = ax.scatter(x_std, y_obs)
-    ax.set_ylim(0, 1)
-    ax.set(title="Posterior predictive regression lines", xlabel="x", ylabel="y")
-    ax.legend(
-        handles=[Line1[0], Line2[0]],
-        labels=["predicted average", "inferred regression line"],
-        loc=0,
-    )
+def plot_map(data: pl.DataFrame):
+    """Plot geographical distribution of scraped languages."""
 
-
-def plot_map():
     df = (
-        pl.read_csv(Path("out", "words.csv"))
-        .group_by(pl.col("lang"))
+        data.group_by(pl.col("lang"))
         .agg(pl.len().alias("n_pron"))
         .join(scraping.get_languages().rename({"iso639p3code": "lang"}), on="lang")
         .filter(pl.col("pop_size") > 0)

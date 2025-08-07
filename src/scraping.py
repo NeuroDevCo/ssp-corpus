@@ -1,42 +1,25 @@
 """Get pronunciations from Wiktionary."""
 
 from pathlib import Path
+from functools import cache
 from datetime import datetime
 import polars as pl
 import lingtypology
 import wikipron
 from rich.console import Console
 
+
 CON = Console()
-PHOIBLE = lingtypology.datasets.Phoible().get_df()
+PHOIBLE = lingtypology.datasets.Phoible()
+PHOIBLE.show_citation = False
 GLOTTO = lingtypology.glottolog.glottolog
 
 
-def add_missing_headers(path: Path = Path("data", "raw")):
-    """Add header to file if missing."""
-    for f in path.glob("*.csv"):
-        header = ["word", "phon"]
-        try:
-            d = pl.read_csv(f, has_header=False)
-            if all(c in header for c in d.slice(0, 1).to_numpy().tolist()[0]):
-                d = d.rename(d.head(1).to_dicts().pop())
-                d.write_csv(f)
-            elif all(
-                c in {k: v for k, v in zip(d.columns, header)}
-                for c in d.slice(0, 1).to_numpy().tolist()[0]
-            ):
-                d = d.slice(1, len(d) - 1)
-                d = d.rename({k: v for k, v in zip(d.columns, header)})
-                d.write_csv(f)
-            elif all("column_" in c for c in d.columns):
-                d = d.rename({k: v for k, v in zip(d.columns, header)})
-                d.write_csv(f)
-            else:
-                pass
-        except pl.exceptions.NoDataError:
-            pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f.name)
+class EmptyLanguage(Exception):
+    "Language has no available pronunciations."
 
 
+@cache
 def get_lang_populations(
     file: str | Path = Path("data", "koplenig2023.tsv")
 ) -> pl.DataFrame:
@@ -60,13 +43,16 @@ def get_lang_populations(
     )
 
 
+@cache
 def get_phoible() -> pl.DataFrame:
     """Get phonological repertoire size for each language."""
-    phoible = PHOIBLE[["glottocode", "phonemes", "consonants", "vowels"]]
+    names = ["glottocode", "phonemes", "consonants", "vowels"]
+    phoible = PHOIBLE.get_df()[names]
     names = {"phonemes": "n_phon", "consonants": "n_cons", "vowels": "n_vow"}
     return pl.from_pandas(phoible).rename(names)
 
 
+@cache
 def get_glottolog() -> pl.DataFrame:
     """Get available languages in Glottolog.
 
@@ -87,16 +73,13 @@ def get_glottolog() -> pl.DataFrame:
     )
 
 
+@cache
 def get_languages() -> pl.DataFrame:
     return (
         get_glottolog()
         .join(get_phoible(), on=["glottocode"], how="left")
         .join(get_lang_populations(), on=["iso639p3code"], how="left")
     )
-
-
-class EmptyLanguage(Exception):
-    "Language has no available pronunciations."
 
 
 def _scrape_lang_wrapper(
@@ -125,7 +108,7 @@ def _scrape_lang_wrapper(
     return None
 
 
-def scrape_lang(lang: str, path: Path = Path("data", "raw")):
+def scrape_language(lang: str, path: Path = Path("data", "raw")):
     """Get pronunciations for language.
 
     Args:
@@ -176,7 +159,7 @@ def scrape_all_languages():
     for i, la in enumerate(langs):
         time = datetime.now().strftime("%Y-%m-%d %H:%M")
         CON.print(f"[{i + 1}/{len(langs)}] {la} ({time})")
-        scrape_lang(la)
+        scrape_language(la)
 
 
 if __name__ == "__main__":

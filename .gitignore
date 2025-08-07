@@ -11,6 +11,7 @@ img/**/*.svg
 __pycache__/
 *.py[cod]
 *$py.class
+model/model
 
 # C extensions
 *.so
