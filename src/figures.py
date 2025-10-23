@@ -64,16 +64,16 @@ def plot_proportions(
     fig, axes = plt.subplots(ncols=2, figsize=(13, 10))
     for ax, d in zip(axes, (d1, d2)):
         for di in d.to_dicts():
-            ax.scatter(0.51, di["lang"], c=colors[di["family_name"]])
+            ax.scatter(0.41, di["lang"], c=colors[di["family_name"]])
             ax.scatter(di["prop"], di["lang"], marker="o", s=15, c="k")
-            label = f"{di["prop"]:.2%}"
+            label = f"{di['prop']:.2%}"
             ax.text(
-                0.53, di["lang"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
+                0.43, di["lang"], s=label, fontsize=4.5, backgroundcolor="#ffffff80"
             )
         texts = {f["lang"]: f["language_name"] for f in d.to_dicts()}
         ax.set_yticklabels(labels=[texts[t.get_text()] for t in ax.get_yticklabels()])
         ax.yaxis.set_tick_params(labelsize=7)
-        ax.set_xlim(0.5, 1.0)
+        ax.set_xlim(0.4, 1.0)
         ax.grid(True, axis="x", ls=":")
     fig.tight_layout()
     if file:
@@ -109,13 +109,13 @@ def plot_estimates(
                 alpha=0.5,
                 zorder=1,
             )
-    ax.scatter(np.repeat(0.49, len(p)), p["param"], c=[colors[f] for f in p["param"]])
+    ax.scatter(np.repeat(0.39, len(p)), p["param"], c=[colors[f] for f in p["param"]])
     for d in p.to_dicts():
-        label = f"{d["mean"]:.1%} [{d["lower"]:.1%}, {d["upper"]:.1%}]"
-        ax.text(0.51, d["param"], s=label, fontsize=4.5, backgroundcolor="#ffffff80")
+        label = f"{d['mean']:.1%} [{d['lower']:.1%}, {d['upper']:.1%}]"
+        ax.text(0.41, d["param"], s=label, fontsize=4.5, backgroundcolor="#ffffff80")
 
     ax.yaxis.set_tick_params(labelsize=7)
-    ax.set_xlim(0.48, 1.0)
+    ax.set_xlim(0.38, 1.0)
     ax.grid(True, axis="x", ls=":")
     fig.tight_layout()
     if file:

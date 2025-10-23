@@ -21,7 +21,7 @@ class EmptyLanguage(Exception):
 
 @cache
 def get_lang_populations(
-    file: str | Path = Path("data", "koplenig2023.tsv")
+    file: str | Path = Path("data", "koplenig2019.csv"),
 ) -> pl.DataFrame:
     """Get Glottolog language populations from Ethnologue.
 
@@ -36,7 +36,7 @@ def get_lang_populations(
         Koplenig, A., Wolfer, S. & Meyer, P. A large quantitative analysis of written language challenges the idea that all languages are equally complex. Sci Rep 13, 15351 (2023). https://doi.org/10.1038/s41598-023-42327-3
     """
     return (
-        pl.read_csv(file, separator="\t")
+        pl.read_csv(file, separator=",")
         .rename(lambda x: x.lower())
         .select(["iso", "popsize"])
         .rename({"iso": "iso639p3code", "popsize": "pop_size"})

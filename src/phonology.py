@@ -6,6 +6,7 @@ from functools import cache
 from itertools import groupby
 import polars as pl
 import numpy as np
+from scipy.signal import find_peaks
 from panphon import FeatureTable, sonority
 from rich.progress import track
 from src import scraping
@@ -53,8 +54,8 @@ def has_one_peak(x: Union[list[int], np.array]) -> bool:
     Returns:
         bool: True if the array only has one peak, False otherwise.
     """  # pylint: disable=line-too-long
-    d = np.diff(x)
-    return bool(np.sum(np.sign(d[1:]) != np.sign(d[:-1])) < 2)
+    peaks = find_peaks(np.hstack([0, x, 0]))[0]
+    return len(peaks) < 2
 
 
 def classify_segments(x: str, **kwargs) -> str:
@@ -157,7 +158,7 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
         .filter(pl.col("sonority") != [""])
         .with_columns(
             pl.col("sonority")
-            .list.diff(null_behavior="drop")
+            # .list.diff(null_behavior="drop")
             .map_elements(has_one_peak, return_dtype=pl.Boolean)
             .alias("is_ssp"),
         )
@@ -223,6 +224,8 @@ def preprocess_languages(
     words, syll = [], []
     lang_list = scraping.get_scraped_languages(path=inpath)
     files = [inpath / (la + ".csv") for la in lang_list]
+    if len(files) == 0:
+        raise ValueError(f"No files were found in {inpath}")
     for f in track(files, f"Preprocessing {len(files)} languages", len(files)):
         lang = f.name.rsplit(".", maxsplit=1)[0]
         try:
