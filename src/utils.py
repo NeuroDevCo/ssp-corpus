@@ -23,8 +23,10 @@ def add_missing_headers(path: Path = Path("data", "raw")):
     """Add header to file if missing."""
     for f in path.glob("*.csv"):
         header = ["word", "phon"]
+
         try:
             d = pl.read_csv(f, has_header=False)
+
             if all(c in header for c in d.slice(0, 1).to_numpy().tolist()[0]):
                 d = d.rename(d.head(1).to_dicts().pop())
                 d.write_csv(f)
@@ -40,5 +42,6 @@ def add_missing_headers(path: Path = Path("data", "raw")):
                 d.write_csv(f)
             else:
                 pass
+
         except pl.exceptions.NoDataError:
             pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f.name)

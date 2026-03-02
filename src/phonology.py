@@ -1,112 +1,126 @@
-"""Preprocess Wiktionary corpora."""
-
-from pathlib import Path
-from typing import Union
-from functools import cache
+from rdflib.container import Seq
+from collections.abc import Sequence
+from functools import lru_cache
 from itertools import groupby
+from pathlib import Path
+
 import polars as pl
 import numpy as np
-from scipy.signal import find_peaks
 from panphon import FeatureTable, sonority
 from rich.progress import track
+from scipy.signal import find_peaks
+
 from src import scraping
 from src.utils import benchmark
 
 
+# Initialize Libraries
 FT = FeatureTable()
 S = sonority.Sonority()
+
 SON = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
 
-
-def count_segments(x: str, **kwargs) -> int:
-    """Count the number of segments in a word-form.
-
-    Args:
-        x (str, optional): Word-form in IPA format. Defaults to "str".
-
-    Returns:
-        int: Number of segments in the word-form.
-    """  # pylint: disable=line-too-long
-    return len(FT.word_fts(x, **kwargs))
+CV_MAP = {}
+for seg, data in FT.seg_dict.items():
+    if data["cons"] == 1:
+        CV_MAP[seg] = "C"
+    elif data["syl"] == 1:
+        CV_MAP[seg] = "V"
+    else:
+        CV_MAP[seg] = ""
 
 
 def count_clusters(x: str, symbol: str = "V") -> int:
-    """Count the number of clusters of a particular type of segment in a phonological word form.
-
-    For instance, if looking for vocalic clusters (say, `symbol = "V"`), "CVVC" has one cluster, while "CVCV" has two clusters.
+    """Count the number of clusters of a particular type of segment in a
+    phonological word form.
 
     Args:
-        x (str): Syllabic structure to analyse.
-        symbol (str, optional): Symbol of the segment type to look for. Defaults to "V".
+        x (str): Word-form to count the number of clusters of.
+        symbol (str): Symbol to look for to identify instances of the segment type.
+
+    Raises:
+        ValueError: If `symbol` is not of length 1.
 
     Returns:
-        int: Number of detected clusters.
-    """  # pylint: disable=line-too-long
+        Number of clusters of consecutive instances of the segment type in `x`.
+    """
+    if len(symbol) != 1:
+        raise ValueError("`symbol` must of of length 1")
+
     return len([b for a, b in groupby(x) if a == symbol])
 
 
-def has_one_peak(x: Union[list[int], np.array]) -> bool:
-    """Check if only has one maximum.
+def has_one_peak(x: Sequence[int]) -> bool:
+    """Check if only has one local maximum.
 
     Args:
-        x (np.array): Array to evaluate.
+        x (Sequence[int] | np.ndarray): Sequence of integers.
 
     Returns:
-        bool: True if the array only has one peak, False otherwise.
-    """  # pylint: disable=line-too-long
-    peaks = find_peaks(np.hstack([0, x, 0]))[0]
-    return len(peaks) < 2
+        int: True if x has less than two local maxima, False otherwise.
+    """
+
+    if len(x) < 3:
+        return len(x) == 1
+
+    count = 0
+    for i in range(1, len(x) - 1):
+        if x[i] > x[i - 1] and x[i] > x[i + 1]:
+            count += 1
+
+            if count > 1:
+                return False
+
+    return count == 1
 
 
-def classify_segments(x: str, **kwargs) -> str:
-    """Classify the segments of a word form into vowels (V) and consonants (C).
+def classify_segments(x: str) -> str:
+    """
+    Classify segments in a word form using precomputed `CV_MAP`.
 
     Args:
-        x (str): Phonological form to classify in IPA formant. The provided string is normalized before classification. Both narrow and broad IPA formats are accepted. Syllable boundaries and supresegmental information is removed.
-        kwargs: Additional arguments passed to ``FeatureTable().word_fts``.
+        x (str): Sequence of segments to classify.
 
-    Returns:
-        str: Syllabic structure, with consonants (C) and vowels (V).
-    """  # pylint: disable=line-too-long
-    struct = ""
-    for s in FT.word_fts(x, **kwargs):
-        if s.data["cons"] == 1:
-            struct += "C"
-        elif s.data["syl"] == 1:
-            struct += "V"
-        else:
-            pass
-
-    return struct
+    Return:
+        str: Sequence of classified segments.
+    """
+    return "".join([CV_MAP.get(s, "") for s in x])
 
 
 def extract_sonority(x: str) -> list[int]:
     """Get sonority score (1-9) of the segments of a word-form.
 
     Args:
-        x (str): Phonological form of the to score in IPA formant.
+        x (str): Sequence of segments to get sonority for.
 
-    Returns:
-        list[int]: Sonority scores of each segment in the word-form.
-    """  # pylint: disable=line-too-long
+    Return:
+        list[int]: Sequence of sonority values.
+    """
     return [SON[s] for s in x if s in SON]
 
 
-def get_words(file: str, syll_boundaries: list[str] = None) -> pl.DataFrame:
+def get_words(
+    file: Path | str, syll_boundaries: Sequence[str] | str | None = None
+) -> pl.DataFrame:
     """Preprocess word forms of a language corpus.
 
     Args:
-        file (str): Raw data of the corpus, as generated by Wiktionary.
-        syll_boundaries (list[str]): List of symbols to be considered as syllabic boundaries.
+        file (Path | str): Path to CSV file with pronunciations.
+        syll_boundaries (Sequence[str] | str | None, optional): Which symbols should be interpreted as marking syllabic boundaries? Defaults to ".", "ˈ", and "ˌ".
 
     Returns:
-        pl.DataFrame: Processed corpus.
-    """  # pylint: disable=line-too-long
+        pl.DataFrame: A Polars dataframe with a word database.
+    """
+    file = Path(file)
+
     if syll_boundaries is None:
         syll_boundaries = [r".", "ˈ", "ˌ"]
+    elif isinstance(syll_boundaries, str):
+        syll_boundaries = [syll_boundaries]
+
     df = (
         pl.read_csv(file)
-        .unique(pl.col("phon"))
+        .unique("phon")
         .with_columns(pl.col("phon").str.replace_all(" ", ""))
         .with_columns(
             pl.col("phon")
@@ -125,49 +139,70 @@ def get_words(file: str, syll_boundaries: list[str] = None) -> pl.DataFrame:
         .with_columns(pl.col("phon").str.len_chars().alias("n_phon"))
         .with_columns(pl.col("syll").list.len().alias("n_syll"))
     )
+
     return df
 
 
 def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
-    """Preprocess word forms of a language corpus.
+    """
+    Get syllables from a words database.
 
     Args:
-        file (str): Raw data of the corpus, as generated by Wiktionary.
+        x (pl.DataFrame): A Polars dataframe with a word database, as generated by `get_words`.
 
     Returns:
-        pl.DataFrame: Processed corpus.
-    """  # pylint: disable=line-too-long
-    df = (
-        x.explode("syll")
-        .with_columns(
-            pl.col("syll")
-            .map_elements(classify_segments, return_dtype=pl.String)
-            .alias("struct")
-        )
-        .filter(
-            pl.col("struct").map_elements(
-                lambda x: count_clusters(x, "V") == 1, return_dtype=pl.Boolean
-            )
-        )
-        .with_columns(
-            pl.col("syll")
-            .map_elements(extract_sonority, return_dtype=pl.List(pl.Int64))
-            .alias("sonority"),
-            pl.col("syll").str.len_chars().alias("n_phon"),
-        )
-        .filter(pl.col("sonority") != [""])
-        .with_columns(
-            pl.col("sonority")
-            # .list.diff(null_behavior="drop")
-            .map_elements(has_one_peak, return_dtype=pl.Boolean)
-            .alias("is_ssp"),
-        )
+        pl.DataFrame: A Polars dataframe with a syllables database.
+    """
+    syllables = x["syll"].to_list()
+
+    valid_indices = []
+    processed_structs = []
+    processed_sonority = []
+    ssp = []
+
+    for i, syl in enumerate(syllables):
+        if not syl:
+            continue
+
+        struct = classify_segments(syl)  # to V and C
+
+        # must have exactly 1 vocalic cluster
+        if count_clusters(struct, "V") != 1:
+            continue
+
+        sonority = [SON.get(s, 0) for s in syl if s in SON]
+        if not sonority:
+            continue
+
+        # follows the SSP
+
+        valid_indices.append(i)
+        processed_structs.append(struct)
+        processed_sonority.append(sonority)
+        ssp.append(has_one_peak(sonority))
+
+    if not valid_indices:
+        return x[:0].clear()  # return empty DataFrame with same schema
+
+    df = x[valid_indices]
+
+    return df.with_columns(
+        pl.Series("struct", processed_structs),
+        pl.Series("sonority", processed_sonority),
+        pl.Series("is_ssp", ssp),
     )
-    return df
 
 
 def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
-    """Cast list columns to strings for saving as CSV."""
+    """Cast list columns to strings for saving as CSV.
+
+    Args:
+        x (pl.DataFrame): Polars dataframe to cast to str.
+        sep (str): Separator to use to join lists into a str.
+
+    Returns:
+        pl.DataFrame: Polars dataframe with list columns casted to str.
+    """
     return x.with_columns(
         pl.col(pl.List(pl.Int64), pl.List(pl.String))
         .cast(pl.List(pl.String))
@@ -175,30 +210,35 @@ def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
     )
 
 
-def add_language_col(x: pl.DataFrame, lang: str):
-    """Add language column to dataset."""
+def add_language_col(x: pl.DataFrame, lang: str) -> pl.DataFrame:
+    """Add language column to dataset.
+
+    Args:
+        x (pl.DataFrame): Polars dataframe to which to add the language column.
+        lang (str): Language code to population the values of the new column with.
+
+    Returns:
+        pl.DataFrame: Polars dataframe with the added language column.
+    """
     return x.with_columns(pl.lit(lang).alias("lang")).select(
         x.columns[0], "lang", pl.exclude(x.columns[0], "lang")
     )
 
 
-def proportion_by(data: pl.DataFrame, by: str = None) -> pl.DataFrame:
-    """Aggregate data to get the proportion of SSP vollowing syllables by group (e.g., language family).
-
-    Args:
-        data (pl.Dataframe): Data to aggregate.
-        by (list[str], optional): Variables to aggregate by. Defaults to ``["lang", "family_name", "language_name"]``.
-
-    Returns:
-        pl.DataFrame: Aggregated dataset.
-    """
+def proportion_by(
+    data: pl.DataFrame, by: str | Sequence[str] | None = None
+) -> pl.DataFrame:
+    """Aggregate data to get the proportion of SSP vollowing syllables by
+    group."""
     if by is None:
         by = ["lang", "family_name", "language_name"]
+
     langs = (
         scraping.get_languages()
         .rename({"iso639p3code": "lang"})
         .select(pl.col(["lang", "family_name", "language_name"]))
     )
+
     return (
         data.join(langs, on="lang")
         .drop_nulls(["family_name"])
@@ -211,42 +251,62 @@ def proportion_by(data: pl.DataFrame, by: str = None) -> pl.DataFrame:
     )
 
 
-@cache
+@lru_cache
 @benchmark
 def preprocess_languages(
     inpath: Path = Path("data", "raw"),
     outpath: Path = Path("data", "processed"),
     min_words: int = 100,
     min_syll: int = 20,
-) -> tuple[pl.DataFrame]:
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Main script."""
 
     words, syll = [], []
+
+    # Ensure output directories exist
+    (outpath / "words").mkdir(parents=True, exist_ok=True)
+    (outpath / "syllables").mkdir(parents=True, exist_ok=True)
+
     lang_list = scraping.get_scraped_languages(path=inpath)
     files = [inpath / (la + ".csv") for la in lang_list]
+
     if len(files) == 0:
         raise ValueError(f"No files were found in {inpath}")
+
     for f in track(files, f"Preprocessing {len(files)} languages", len(files)):
-        lang = f.name.rsplit(".", maxsplit=1)[0]
         try:
             # process words
-            w = add_language_col(get_words(f), lang)
+            w = add_language_col(get_words(f), f.stem)
+
             if len(w) < min_words:
                 continue
+
             words.append(w)
-            cast_to_str(w).write_csv(outpath / "words" / f"{lang}.csv")
-            # process syllables
-            s = add_language_col(get_syllables(w), lang)
+            cast_to_str(w).write_csv(outpath / "words" / f"{f.stem}.csv")
+
+            # process syllables (using optimized function)
+            s = add_language_col(get_syllables(w), f.stem)
+
             if len(s) < min_syll:
                 continue
+
             syll.append(s)
-            cast_to_str(s).write_csv(outpath / "syllables" / f"{lang}.csv")
+            cast_to_str(s).write_csv(outpath / "syllables" / f"{f.stem}.csv")
+
         except pl.exceptions.NoDataError as e:
             print(e)
+
+    # Ensure return types are always DataFrames (fixes linting error)
     if len(words) > 0:
         words = pl.concat(words)
+    else:
+        words = pl.DataFrame()
+
     if len(syll) > 0:
         syll = pl.concat(syll)
+    else:
+        syll = pl.DataFrame()
+
     return words, syll
 
 

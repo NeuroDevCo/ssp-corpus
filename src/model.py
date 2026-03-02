@@ -1,16 +1,18 @@
 """Model SSP prevalence."""
 
+from collections.abc import Sequence
 from pathlib import Path
+
+import arviz as az
+from cmdstanpy import CmdStanModel, stanfit
 import numpy as np
 import polars as pl
-from cmdstanpy import CmdStanModel, stanfit
-import arviz as az
 
-RANDOM_SEED = 1234
+RANDOM_SEED: int = 1234
 rng = np.random.default_rng(RANDOM_SEED)
 
 
-def get_group_indices(x: list[str]) -> dict[str, int]:
+def get_group_indices(x: Sequence[str]) -> dict[str, int]:
     """Assign integer indicaes to each group.
 
     Args:
@@ -30,10 +32,10 @@ def fit_model(
     group_var: str = "family_name",
     n_samples: int = 4_000,
     n_chains: int = 8,
-    file: str | Path = Path("model", "model.stan"),
-    outpath: str | Path = None,
+    file: Path | str = Path("model", "model.stan"),
+    outpath: Path | str | None = None,
     **kwargs,
-) -> stanfit.CmdStanMCMC:
+) -> tuple[stanfit.CmdStanMCMC, dict]:
     """Fit Bayesian multilevel model with a Binomial distribution in CmdStanPy.
 
     Args:
@@ -51,11 +53,14 @@ def fit_model(
         stanfit.CmdStanMCMC: Posterior MCMC samples.
         dict: Stan data.
     """
+    file = Path(file)
+
     d = data.sort("family_name")
     y, n = [d[v].to_numpy() for v in (y_var, n_var)]
-    lookup = get_group_indices(d[group_var].to_numpy())
+    lookup = get_group_indices(d[group_var].to_list())
     groups = d[group_var].unique().to_numpy()
     group_idx = [lookup[g] for g in d[group_var]]
+
     d = {
         "N": len(y),
         "n": n,
@@ -64,7 +69,9 @@ def fit_model(
         "j": group_idx,
         "group_labels": lookup,
     }
+
     m = CmdStanModel(stan_file=file)
+
     fit = m.sample(
         data=d,
         step_size=0.1,
@@ -75,8 +82,9 @@ def fit_model(
         parallel_chains=n_chains,
         **kwargs,
     )
+
     if outpath:
-        fit.save_csvfiles(outpath)
+        fit.save_csvfiles(str(outpath))
     return fit, d
 
 
@@ -98,11 +106,11 @@ def summarize_posterior(
     hdi_names = {f"hdi_{h}%": i for h, i in zip(hdi_names, ("lower", "upper"))}
     idata = az.from_cmdstanpy(fit)
     p = az.summary(idata, hdi_prob=width, var_names=["theta"])
-    p.reset_index(names="param", inplace=True)
+    p.reset_index("param")
 
     lookup = {str(v - 1): k for k, v in stan_data["group_labels"].items()}
     draws = (
-        pl.from_pandas(p)
+        pl.DataFrame(pl.from_pandas(p))
         .rename({"hdi_2.5%": "lower", "hdi_97.5%": "upper"})
         .with_columns(
             pl.col("param")

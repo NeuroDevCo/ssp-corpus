@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 from matplotlib import colors as cm
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.basemap import Basemap
-from src import scraping, model
+from src import scraping
 
 
 def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]:
