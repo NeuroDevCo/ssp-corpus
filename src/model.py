@@ -8,8 +8,36 @@ from cmdstanpy import CmdStanModel, stanfit
 import numpy as np
 import polars as pl
 
+from src import scraping
+
 RANDOM_SEED: int = 1234
 rng = np.random.default_rng(RANDOM_SEED)
+
+
+def prepare_data(
+    data: pl.DataFrame,
+    by: str | Sequence[str] | None = None,
+    languages: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """Aggregate data to get the proportion of SSP vollowing syllables by
+    group."""
+    if by is None:
+        by = ["iso639p3code", "family_id", "lang"]
+
+    if languages is None:
+        languages = scraping.get_languages()
+    languages = languages.select(pl.col(by))
+
+    return (
+        data.join(languages, on="iso639p3code")
+        .drop_nulls(["family_id"])
+        .group_by(by)
+        .agg(
+            pl.len().alias("n"),
+            pl.mean("is_ssp").alias("prop"),
+            pl.sum("is_ssp").alias("sum"),
+        )
+    )
 
 
 def get_group_indices(x: Sequence[str]) -> dict[str, int]:
@@ -29,7 +57,7 @@ def fit_model(
     data: pl.DataFrame,
     y_var: str = "sum",
     n_var: str = "n",
-    group_var: str = "family_name",
+    group_var: str = "family_id",
     n_samples: int = 4_000,
     n_chains: int = 8,
     file: Path | str = Path("model", "model.stan"),
@@ -55,7 +83,7 @@ def fit_model(
     """
     file = Path(file)
 
-    d = data.sort("family_name")
+    d = data.sort(group_var)
     y, n = [d[v].to_numpy() for v in (y_var, n_var)]
     lookup = get_group_indices(d[group_var].to_list())
     groups = d[group_var].unique().to_numpy()
@@ -105,7 +133,7 @@ def summarize_posterior(
     hdi_names = np.round(hdi_names, decimals=2)
     hdi_names = {f"hdi_{h}%": i for h, i in zip(hdi_names, ("lower", "upper"))}
     idata = az.from_cmdstanpy(fit)
-    p = az.summary(idata, hdi_prob=width, var_names=["theta"])
+    p = az.summary(idata, ci_prob=width, var_names=["theta"])
     p.reset_index("param")
 
     lookup = {str(v - 1): k for k, v in stan_data["group_labels"].items()}

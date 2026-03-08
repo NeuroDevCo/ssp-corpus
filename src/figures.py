@@ -1,12 +1,15 @@
 """Create figures."""
 
 from pathlib import Path
-import polars as pl
-import numpy as np
+
 from matplotlib import pyplot as plt
 from matplotlib import colors as cm
+from matplotlib.colors import Colormap
 from matplotlib.ticker import FuncFormatter
 from mpl_toolkits.basemap import Basemap
+import numpy as np
+import polars as pl
+
 from src import scraping
 
 
@@ -28,7 +31,7 @@ def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]
         .sort("family_name")
     )
     f = lang.get_column("family_name").sort().to_list()
-    cmap = plt.get_cmap(cmap)
+    cmap: Colormap = plt.get_cmap(cmap)
     vals = cmap(np.linspace(0, 1, len(f)), alpha=alpha)
     return {k: cm.rgb2hex(v, keep_alpha=True) for k, v in zip(f, vals)}
 
@@ -129,13 +132,13 @@ def plot_map(data: pl.DataFrame):
         data.group_by(pl.col("lang"))
         .agg(pl.len().alias("n_pron"))
         .join(scraping.get_languages().rename({"iso639p3code": "lang"}), on="lang")
-        .filter(pl.col("pop_size") > 0)
+        .filter(pl.col("n_speakers") > 0)
         .with_columns(
-            pl.col("pop_size").sqrt().fill_nan(None).alias("exp_pop_size"),
+            pl.col("n_speakers").sqrt().fill_nan(None).alias("exp_n_speakers"),
             pl.col("n_pron").sqrt().fill_nan(None).alias("exp_n_pron"),
         )
-        .drop_nulls(pl.col("exp_pop_size"))
-        .sort("family_name")
+        .drop_nulls("exp_n_speakers")
+        .sort("family_id")
     )
     fig, ax = plt.subplots(figsize=(9, 6))
     m = Basemap(
@@ -187,8 +190,8 @@ def plot_map(data: pl.DataFrame):
         ax=ax,
     )
     for lg in legend_fam.legend_handles:
-        lg.set_sizes([200])
-        lg.set_alpha([1])
+        if lg:
+            lg.set_alpha(1)
     handles, labels = pop_scatter.legend_elements(
         prop="sizes",
         alpha=0.6,
@@ -207,7 +210,7 @@ def plot_map(data: pl.DataFrame):
         ncol=5,
         bbox_to_anchor=(0, 1.15),
     )
-    legend_pop._legend_box.sep = 20
+    # legend_pop._legend_box.sep = 20
 
     # pot n pronunciations
     scatter_pron = m.scatter(
@@ -224,7 +227,7 @@ def plot_map(data: pl.DataFrame):
         prop="sizes",
         alpha=0.6,
         num=5,
-        func=lambda x: (x**2),
+        func=lambda x: x**2,
         mec="#333232",
         fmt=FuncFormatter(lambda x, p: format(int(x), ",")),
         mfc="none",
@@ -239,7 +242,7 @@ def plot_map(data: pl.DataFrame):
         frameon=False,
         bbox_to_anchor=(0, -0.15),
     )
-    legend_pron._legend_box.sep = 10
+    # legend_pron._legend_box.sep = 10
     m.scatter(
         x,
         y,

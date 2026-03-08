@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from datetime import datetime
 
-from lingtypology import datasets, glottolog
+from lingtypology import datasets
 import polars as pl
 from rich.console import Console
 from wikipron import Config, scrape
@@ -16,28 +16,59 @@ class EmptyLanguage(Exception):
     "Language has no available pronunciations."
 
 
-@lru_cache
-def get_lang_populations(
-    file: str | Path = Path("data", "koplenig2019.csv"),
-) -> pl.DataFrame:
-    """Get Glottolog language populations from Ethnologue.
+def get_glottolog() -> pl.DataFrame:
+    url = "https://github.com/glottolog/glottolog-cldf/raw/refs/heads/master/cldf/languages.csv"
+    cols = ["glottocode", "lang", "family_id", "iso639p3code", "latitude", "longitude"]
+
+    df = (
+        pl.scan_csv(url)
+        .filter(pl.col("Level") == "language")
+        .drop_nulls("ISO639P3code")
+        .rename(lambda x: x.lower())
+        .rename({"name": "lang"})
+        .with_columns(
+            pl.when(pl.col("is_isolate"))
+            .then(pl.lit("Isolate"))
+            .otherwise("family_id")
+            .alias("family_id")
+        )
+        .select(cols)
+    )
+
+    return pl.DataFrame(df.collect())
+
+
+def get_wikidata(file: Path | str = Path("data", "wikidata.csv")) -> pl.DataFrame:
+    """
+    Get number of speakers from Wikidata.
 
     Args:
-        file (str, optional): Path to the TSV by Koplenig et al. (2023).
+        file (Path | str): Path to the CSV file to generate, if any. Defaults to data/wikidata.csv.
 
     Notes:
-        Curated by Koplenig et al. (2023), rertieved from https://osf.io/p5ejc.
-
-    References:
-
-        Koplenig, A., Wolfer, S. & Meyer, P. A large quantitative analysis of written language challenges the idea that all languages are equally complex. Sci Rep 13, 15351 (2023). https://doi.org/10.1038/s41598-023-42327-3
+        sparQL query from https://gist.github.com/unhammer/3e8f2e0f79972bf5008a4c970081502d.
     """
-    return (
-        pl.read_csv(file, separator=",")
+    url = "https://gist.github.com/unhammer/3e8f2e0f79972bf5008a4c970081502d/raw/ffa2c42826bd2682f24781933e9a73a799c7f033/speakersPerLanguage.tsv"
+
+    lookup = {
+        "numberofspeakers": "n_speakers",
+        "iso639_3": "iso639p3code",
+        "speakerstime": "time",
+        "item": "url",
+    }
+    df = (
+        pl.scan_csv(url, separator="\t")
         .rename(lambda x: x.lower())
-        .select(["iso", "popsize"])
-        .rename({"iso": "iso639p3code", "popsize": "pop_size"})
-    )
+        .rename(lookup)
+        .select(["iso639p3code", "n_speakers", "time", "url"])
+    ).collect()
+
+    df = pl.DataFrame(df)
+
+    if file:
+        df.write_csv(Path(file), separator=",")
+
+    return df
 
 
 @lru_cache
@@ -51,32 +82,37 @@ def get_phoible() -> pl.DataFrame:
 
 
 @lru_cache
-def get_glottolog() -> pl.DataFrame:
-    """Get available languages in Glottolog.
+def get_languages(file: Path | str = Path("out", "languages.csv")) -> pl.DataFrame:
+    glottolog = get_glottolog()
+    phoible = get_phoible()
+    wikidata_path = Path("data/wikidata.csv")
+    wikidata = pl.read_csv(wikidata_path) if wikidata_path.exists() else get_wikidata()
+    wikidata = wikidata.select(["iso639p3code", "n_speakers"])
 
-    Returns:
-        pl.DataFrame: Available languages in Glottolog.
-    """
-    return (
-        pl.DataFrame(glottolog.glottolog)
-        .rename(lambda x: x.lower())
-        .filter(pl.col("status") != "Extinct")
-        .drop_nulls("iso639p3code")
-        .with_columns(
-            pl.when(pl.col("iso639p3code").is_in(["eus"]))
-            .then(pl.lit("Isolate"))
-            .otherwise("family_name")
-            .alias("family_name")
-        )
+    cols_select = [
+        "iso639p3code",
+        "lang",
+        "glottocode",
+        "n_speakers",
+        "family_id",
+        "latitude",
+        "longitude",
+        "n_phon",
+        "n_cons",
+        "n_vow",
+    ]
+    df = (
+        glottolog.join(wikidata, on=["iso639p3code"], how="left")
+        .join(phoible, on=["glottocode"], how="left")
+        .select(cols_select)
+        .sort("iso639p3code")
     )
 
+    file = Path(file)
+    if file:
+        df.write_csv(file)
 
-@lru_cache
-def get_languages() -> pl.DataFrame:
-    return (
-        get_glottolog().join(get_phoible(), on=["glottocode"], how="left")
-        # .join(get_lang_populations(), on=["iso639p3code"], how="left")
-    )
+    return df
 
 
 def _scrape_lang_wrapper(lang: str, conf: Config, path: Path = Path("data", "raw")):

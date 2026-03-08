@@ -1,14 +1,11 @@
-from rdflib.container import Seq
 from collections.abc import Sequence
 from functools import lru_cache
 from itertools import groupby
 from pathlib import Path
 
 import polars as pl
-import numpy as np
 from panphon import FeatureTable, sonority
 from rich.progress import track
-from scipy.signal import find_peaks
 
 from src import scraping
 from src.utils import benchmark
@@ -18,7 +15,7 @@ from src.utils import benchmark
 FT = FeatureTable()
 S = sonority.Sonority()
 
-SON = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
+SON: dict = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
 
 CV_MAP = {}
 for seg, data in FT.seg_dict.items():
@@ -119,28 +116,25 @@ def get_words(
         syll_boundaries = [syll_boundaries]
 
     df = (
-        pl.read_csv(file)
+        pl.scan_csv(file)
         .unique("phon")
-        .with_columns(pl.col("phon").str.replace_all(" ", ""))
         .with_columns(
             pl.col("phon")
+            .str.replace_all(" ", "")
             .str.replace_many({b: "." for b in syll_boundaries})
-            .str.strip_chars(".")
-        )
-        .with_columns(
+            .str.strip_chars("."),
             pl.col("phon")
             .str.split(".")
-            .map_elements(
-                lambda x: [xi for xi in x if len(xi) > 0],
-                return_dtype=pl.List(pl.String),
-            )
-            .alias("syll")
+            .list.eval(pl.element().filter(pl.element() != ""))
+            .alias("syll"),
+            pl.col("phon").str.len_chars().alias("n_phon"),
         )
-        .with_columns(pl.col("phon").str.len_chars().alias("n_phon"))
-        .with_columns(pl.col("syll").list.len().alias("n_syll"))
+        .with_columns(
+            pl.col("syll").list.len().alias("n_syll"),
+        )
     )
 
-    return df
+    return pl.DataFrame(df.collect())
 
 
 def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
@@ -153,7 +147,7 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
     Returns:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
-    syllables = x["syll"].to_list()
+    syllables = x["phon"].to_list()
 
     valid_indices = []
     processed_structs = []
@@ -174,8 +168,6 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
         if not sonority:
             continue
 
-        # follows the SSP
-
         valid_indices.append(i)
         processed_structs.append(struct)
         processed_sonority.append(sonority)
@@ -193,7 +185,7 @@ def get_syllables(x: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
+def cast_to_str(x: pl.DataFrame, sep: str = "_") -> pl.DataFrame:
     """Cast list columns to strings for saving as CSV.
 
     Args:
@@ -210,44 +202,19 @@ def cast_to_str(x: pl.DataFrame, sep: str = ", ") -> pl.DataFrame:
     )
 
 
-def add_language_col(x: pl.DataFrame, lang: str) -> pl.DataFrame:
+def add_language_col(x: pl.DataFrame, col: str) -> pl.DataFrame:
     """Add language column to dataset.
 
     Args:
         x (pl.DataFrame): Polars dataframe to which to add the language column.
-        lang (str): Language code to population the values of the new column with.
+        iso639p3code (str): Language code to population the values of the new column with.
 
     Returns:
         pl.DataFrame: Polars dataframe with the added language column.
     """
-    return x.with_columns(pl.lit(lang).alias("lang")).select(
-        x.columns[0], "lang", pl.exclude(x.columns[0], "lang")
-    )
-
-
-def proportion_by(
-    data: pl.DataFrame, by: str | Sequence[str] | None = None
-) -> pl.DataFrame:
-    """Aggregate data to get the proportion of SSP vollowing syllables by
-    group."""
-    if by is None:
-        by = ["lang", "family_name", "language_name"]
-
-    langs = (
-        scraping.get_languages()
-        .rename({"iso639p3code": "lang"})
-        .select(pl.col(["lang", "family_name", "language_name"]))
-    )
-
-    return (
-        data.join(langs, on="lang")
-        .drop_nulls(["family_name"])
-        .group_by(by)
-        .agg(
-            pl.len().alias("n"),
-            pl.mean("is_ssp").alias("prop"),
-            pl.sum("is_ssp").alias("sum"),
-        )
+    nm = "iso639p3code"
+    return x.with_columns(pl.lit(col).alias(nm)).select(
+        x.columns[0], nm, pl.exclude(x.columns[0], nm)
     )
 
 
@@ -284,7 +251,6 @@ def preprocess_languages(
             words.append(w)
             cast_to_str(w).write_csv(outpath / "words" / f"{f.stem}.csv")
 
-            # process syllables (using optimized function)
             s = add_language_col(get_syllables(w), f.stem)
 
             if len(s) < min_syll:
