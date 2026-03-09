@@ -249,7 +249,7 @@ def preprocess_languages(
                 continue
 
             words.append(w)
-            cast_to_str(w).write_csv(outpath / "words" / f"{f.stem}.csv")
+            cast_to_str(w).write_parquet(outpath / "words" / f"{f.stem}.parquet")
 
             s = add_language_col(get_syllables(w), f.stem)
 
@@ -257,7 +257,7 @@ def preprocess_languages(
                 continue
 
             syll.append(s)
-            cast_to_str(s).write_csv(outpath / "syllables" / f"{f.stem}.csv")
+            cast_to_str(s).write_parquet(outpath / "syllables" / f"{f.stem}.parquet")
 
         except pl.exceptions.NoDataError as e:
             print(e)
@@ -278,5 +278,5 @@ def preprocess_languages(
 
 if __name__ == "__main__":
     WORDS, SYLL = preprocess_languages()
-    cast_to_str(WORDS).write_csv(Path("out", "words.csv"))
-    cast_to_str(SYLL).write_csv(Path("out", "syllables.csv"))
+    cast_to_str(WORDS).write_parquet(Path("out", "words.parquet"))
+    cast_to_str(SYLL).write_parquet(Path("out", "syllables.parquet"))

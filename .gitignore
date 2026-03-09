@@ -2,6 +2,7 @@ backup/
 out/**/*.csv
 data/**/*.csv
 data/**/*.tsv
+/**/*.parquet
 img/**/*.png
 img/**/*.jpg
 img/**/*.jpeg
