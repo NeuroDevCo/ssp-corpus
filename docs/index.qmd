@@ -2,46 +2,32 @@
 ## Method
 
 ```{python}
-import sys
 from pathlib import Path
+import sys
+
 from great_tables import GT, md, html, from_column, style, loc
-import polars as pl
 from matplotlib import pyplot as plt
+import polars as pl
+
 from src import scraping, figures
+
+OUT_PATH: Path = Path("out")
 ```
+
+
 
 ### Dataset acquisition
 
 ```{python}
-glotto = scraping.get_languages()
-scraped = scraping.get_scraped_languages()
-words = pl.read_csv(Path("out", "words.csv"))
-syllables = pl.read_csv(Path("out", "syllables.csv"))
-data = pl.read_csv(Path("out", "data.csv"))
-languages = (
-    words.group_by("lang")
-    .agg(pl.len().alias("n"))
-    .sort("n", descending=True)
-    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
-)
-languages_syll = (
-    syllables.group_by("lang")
-    .agg(pl.len().alias("n_syll"))
-    .join(languages.with_row_index("sort"), on="lang")
-    .sort("sort")
-    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
-)
-languages_struct = (
-    syllables.unique(pl.col(["lang", "struct"]))
-    .group_by(pl.col(["lang"]))
-    .agg(pl.len().alias("n_struct"))
-    .join(languages.with_row_index("sort"), on="lang")
-    .sort("sort")
-    .join(glotto.rename({"iso639p3code": "lang"}), on="lang")
-)
+languages = pl.read_parquet(OUT_PATH / "languages.parquet")
+words = pl.read_parquet(OUT_PATH / "words.parquet")
+syllables = pl.read_parquet(OUT_PATH / "syllables.parquet")
+
+n_eff_langs_words = len(words.unique("iso639p3code"))
+n_eff_langs_syllables = len(syllables.unique("iso639p3code"))
 ```
 
-All `{python} len(glotto)` languages included in the Glottolog database were targeted. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(languages)` languages with at least 100 pronunciations available in Wiktionary.
+All `{python} len(languages)` languages included in the Glottolog database were targeted. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(languages)` languages with at least 100 pronunciations available in Wiktionary.
 
 ![Distribution of the `{python} len(languages)` languages included in the final dataset. Black dots indicate the location assigned to each language by Glottolog. The color and size of the shaded circles indicate the language family and estimated population of speakers of each language, respectively. The size of the empty black circles indicate the number of pronunciations retrived from each language. Large divergencies between the size of the shaded and empty circles indicate the the language is over or under-represented in the dataset.](../img/map.png){#fig-map}
 

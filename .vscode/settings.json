@@ -1,4 +1,9 @@
 {
     "editor.fontLigatures": false,
-    "terminal.integrated.fontLigatures.enabled": false
+    "terminal.integrated.fontLigatures.enabled": false,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

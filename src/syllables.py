@@ -1,14 +1,16 @@
 from collections.abc import Sequence
+from functools import lru_cache
 from itertools import groupby
 from pathlib import Path
 
 from iso639 import Language
-import polars as pl
+import numpy as np
 from panphon import FeatureTable, sonority
+import polars as pl
 from rich.progress import track
 
 from src import languages, words
-from src.utils import benchmark, cast_to_str
+from src.utils import benchmark
 
 IN_PATH: Path = Path("data/raw")
 OUT_PATH: Path = Path("data/processed/syllables")
@@ -17,16 +19,24 @@ OUT_PATH: Path = Path("data/processed/syllables")
 FT = FeatureTable()
 S = sonority.Sonority()
 
-SON: dict = {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
 
-CV_MAP = {}
-for seg, data in FT.seg_dict.items():
-    if data["cons"] == 1:
-        CV_MAP[seg] = "C"
-    elif data["syl"] == 1:
-        CV_MAP[seg] = "V"
-    else:
-        CV_MAP[seg] = ""
+@lru_cache
+def get_sonority() -> dict[str, int]:
+    return {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
+
+
+@lru_cache
+def get_classified_segments(other: str = "") -> dict[str, str]:
+    out = {}
+    for seg, data in FT.seg_dict.items():
+        if data["cons"] == 1:
+            out[seg] = "C"
+        elif data["syl"] == 1:
+            out[seg] = "V"
+        else:
+            out[seg] = other
+
+    return out
 
 
 def count_clusters(x: str, symbol: str = "V") -> int:
@@ -49,31 +59,45 @@ def count_clusters(x: str, symbol: str = "V") -> int:
     return len([b for a, b in groupby(x) if a == symbol])
 
 
-def has_one_peak(x: Sequence[int]) -> bool:
-    """Check if only has one local maximum.
-
-    Args:
-        x (Sequence[int] | np.ndarray): Sequence of integers.
-
-    Returns:
-        int: True if x has less than two local maxima, False otherwise.
+def has_one_peak(seq):
     """
+    Determine whether a sequence contains at most one strict local maximum.
 
-    if len(x) < 3:
-        return len(x) == 1
+    A strict local maximum is defined as an element that is greater than its
+    immediate neighbours. For the first and last elements, they are considered
+    maxima if they are greater than their only neighbour.
+
+    The function returns True when the number of such maxima is 0 or 1,
+    and False when there are two or more.
+
+    Examples:
+    >>> has_only_one_maximum([1, 2, 3, 2, 1])
+    True
+    >>> has_only_one_maximum([1, 2, 1, 2, 1])
+    False
+    >>> has_only_one_maximum([5, 5, 5])
+    True
+    >>> has_only_one_maximum([])
+    True
+    >>> has_only_one_maximum([42])
+    True
+    """
+    n = len(seq)
+    if n == 0:
+        return True
 
     count = 0
-    for i in range(1, len(x) - 1):
-        if x[i] > x[i - 1] and x[i] > x[i + 1]:
+    for i in range(n):
+        left_ok = (i == 0) or (seq[i] > seq[i - 1])
+        right_ok = (i == n - 1) or (seq[i] > seq[i + 1])
+        if left_ok and right_ok:
             count += 1
-
             if count > 1:
                 return False
+    return True
 
-    return count == 1
 
-
-def classify_segments(x: str) -> str:
+def classify_segments(x: str, **kwargs) -> str:
     """
     Classify segments in a word form using precomputed `CV_MAP`.
 
@@ -83,7 +107,7 @@ def classify_segments(x: str) -> str:
     Return:
         str: Sequence of classified segments.
     """
-    return "".join([CV_MAP.get(s, "") for s in x])
+    return "".join([get_classified_segments(**kwargs).get(s, "") for s in x])
 
 
 def extract_sonority(x: str) -> list[int]:
@@ -95,7 +119,8 @@ def extract_sonority(x: str) -> list[int]:
     Return:
         list[int]: Sequence of sonority values.
     """
-    return [SON[s] for s in x if s in SON]
+    sonority = get_sonority()
+    return [sonority[s] for s in x if s in sonority]
 
 
 def iso639_p3_to_p1(p3: str):
@@ -134,7 +159,8 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
         if count_clusters(struct, "V") != 1:
             continue
 
-        son = [SON.get(s, 0) for s in syl if s in SON]
+        sonority = get_sonority()
+        son = [sonority.get(s, 0) for s in syl if s in sonority]
         if not son:
             continue
 
@@ -166,17 +192,21 @@ def get_syllables(x: pl.DataFrame, min_syll: int = 20) -> pl.DataFrame:
     msg = f"SYLLABLES: Preprocessing {len(part_words)} languages"
     for lang_words in track(part_words, msg, len(part_words)):
         try:
-            s = get_lang_syllables(lang_words)
-            if len(s) < min_syll:
+            df = get_lang_syllables(lang_words)
+            if len(df) < min_syll:
                 continue
-            syll.append(s)
+            syll.append(df)
+
             lang = lang_words.unique("iso639p3code").get_column("iso639p3code")
-            cast_to_str(s).write_parquet(OUT_PATH / f"{lang[0]}.parquet")
+            df.write_parquet(OUT_PATH / f"{lang[0]}.parquet")
 
         except pl.exceptions.NoDataError as e:
             print(e)
 
-    return pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
+    syll = pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
+    syll.write_parquet(Path("out/syllables.parquet"))
+
+    return syll
 
 
 if __name__ == "__main__":

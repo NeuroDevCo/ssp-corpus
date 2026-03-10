@@ -5,6 +5,7 @@ from iso639 import Language
 import polars as pl
 from rich.progress import track
 from wordfreq import zipf_frequency
+
 from src import languages
 from src.utils import add_lang_col, benchmark, cast_to_str
 
@@ -99,15 +100,17 @@ def get_words(x: pl.DataFrame, min_words: int = 100):
     msg = f"WORDS: Preprocessing {len(x)} languages"
     for lang in track(x["iso639p3code"].to_list(), msg, len(x)):
         try:
-            w = add_lang_col(get_lang_words(IN_PATH / f"{lang}.csv"), lang)
-            if len(w) < min_words:
+            df = add_lang_col(get_lang_words(IN_PATH / f"{lang}.csv"), lang)
+            if len(df) < min_words:
                 continue
-            words.append(w)
-            cast_to_str(w).write_parquet(OUT_PATH / f"{lang}.parquet")
+            words.append(df)
+            df.write_parquet(OUT_PATH / f"{lang}.parquet")
         except (FileNotFoundError, pl.exceptions.NoDataError):
             continue
+    words = pl.concat(words) if len(words) > 0 else pl.DataFrame()
+    words.write_parquet(Path("out/words.parquet"))
 
-    return pl.concat(words) if len(words) > 0 else pl.DataFrame()
+    return words
 
 
 if __name__ == "__main__":

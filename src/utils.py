@@ -1,12 +1,13 @@
 """Util functions."""
 
-from time import time
 from pathlib import Path
+from time import time
+
 import polars as pl
 
 
 def benchmark(func):
-    """Print the runtime of the decorated function"""
+    """Print the runtime of a decorated function"""
 
     def wrapper_timer(*args, **kwargs):
         start_time = time()
@@ -20,7 +21,11 @@ def benchmark(func):
 
 
 def add_missing_headers(path: Path = Path("data", "raw")):
-    """Add header to file if missing."""
+    """Add header to file if missing.
+
+    Args:
+        path (Path): Path to the file with missing header.
+    """
     for f in path.glob("*.csv"):
         header = ["word", "phon"]
 
@@ -44,7 +49,7 @@ def add_missing_headers(path: Path = Path("data", "raw")):
                 pass
 
         except pl.exceptions.NoDataError:
-            pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f.name)
+            pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f)
 
 
 def cast_to_str(x: pl.DataFrame, sep: str = "_") -> pl.DataFrame:
