@@ -1,7 +1,8 @@
-from src import scraping, phonology, model
+from src import languages, words, syllables, model
 
 if __name__ == "__main__":
-    LANGS = scraping.get_languages()
-    WORDS, SYLL = phonology.preprocess_languages()
-    DATA = model.prepare_data(SYLL, languages=LANGS)
+    LANGS = languages.get_languages()
+    WORDS = words.get_words(LANGS)
+    SYLLS = syllables.get_syllables(WORDS)
+    DATA = model.prepare_data(SYLLS, languages=LANGS)
     MODEL, DATA_MODEL = model.fit_model(DATA)

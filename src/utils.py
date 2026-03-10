@@ -45,3 +45,36 @@ def add_missing_headers(path: Path = Path("data", "raw")):
 
         except pl.exceptions.NoDataError:
             pl.DataFrame(schema={"word": str, "phon": int}).write_csv(f.name)
+
+
+def cast_to_str(x: pl.DataFrame, sep: str = "_") -> pl.DataFrame:
+    """Cast list columns to strings for saving as CSV.
+
+    Args:
+        x (pl.DataFrame): Polars dataframe to cast to str.
+        sep (str): Separator to use to join lists into a str.
+
+    Returns:
+        pl.DataFrame: Polars dataframe with list columns casted to str.
+    """
+    return x.with_columns(
+        pl.col(pl.List(pl.Int64), pl.List(pl.String))
+        .cast(pl.List(pl.String))
+        .list.join(sep)
+    )
+
+
+def add_lang_col(x: pl.DataFrame, col: str) -> pl.DataFrame:
+    """Add language column to dataset.
+
+    Args:
+        x (pl.DataFrame): Polars dataframe to which to add the language column.
+        iso639p3code (str): Language code to populate the values of the new column with.
+
+    Returns:
+        pl.DataFrame: Polars dataframe with the added language column.
+    """
+    nm = "iso639p3code"
+    return x.with_columns(pl.lit(col).alias(nm)).select(
+        x.columns[0], nm, pl.exclude(x.columns[0], nm)
+    )

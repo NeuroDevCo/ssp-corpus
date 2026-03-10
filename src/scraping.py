@@ -1,118 +1,18 @@
 """Get pronunciations from Wiktionary."""
 
-from functools import lru_cache
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
-from lingtypology import datasets
-import polars as pl
 from rich.console import Console
 from wikipron import Config, scrape
+
+from src.languages import get_languages
 
 CON: Console = Console()
 
 
 class EmptyLanguage(Exception):
     "Language has no available pronunciations."
-
-
-def get_glottolog() -> pl.DataFrame:
-    url = "https://github.com/glottolog/glottolog-cldf/raw/refs/heads/master/cldf/languages.csv"
-    cols = ["glottocode", "lang", "family_id", "iso639p3code", "latitude", "longitude"]
-
-    df = (
-        pl.scan_csv(url)
-        .filter(pl.col("Level") == "language")
-        .drop_nulls("ISO639P3code")
-        .rename(lambda x: x.lower())
-        .rename({"name": "lang"})
-        .with_columns(
-            pl.when(pl.col("is_isolate"))
-            .then(pl.lit("Isolate"))
-            .otherwise("family_id")
-            .alias("family_id")
-        )
-        .select(cols)
-    )
-
-    return pl.DataFrame(df.collect())
-
-
-def get_wikidata(file: Path | str = Path("data", "wikidata.csv")) -> pl.DataFrame:
-    """
-    Get number of speakers from Wikidata.
-
-    Args:
-        file (Path | str): Path to the CSV file to generate, if any. Defaults to data/wikidata.csv.
-
-    Notes:
-        sparQL query from https://gist.github.com/unhammer/3e8f2e0f79972bf5008a4c970081502d.
-    """
-    url = "https://gist.github.com/unhammer/3e8f2e0f79972bf5008a4c970081502d/raw/ffa2c42826bd2682f24781933e9a73a799c7f033/speakersPerLanguage.tsv"
-
-    lookup = {
-        "numberofspeakers": "n_speakers",
-        "iso639_3": "iso639p3code",
-        "speakerstime": "time",
-        "item": "url",
-    }
-    df = (
-        pl.scan_csv(url, separator="\t")
-        .rename(lambda x: x.lower())
-        .rename(lookup)
-        .select(["iso639p3code", "n_speakers", "time", "url"])
-    ).collect()
-
-    df = pl.DataFrame(df)
-
-    if file:
-        df.write_csv(Path(file), separator=",")
-
-    return df
-
-
-@lru_cache
-def get_phoible() -> pl.DataFrame:
-    """Get phonological repertoire size for each language."""
-    names = ["glottocode", "phonemes", "consonants", "vowels"]
-    phoible = datasets.Phoible().get_df()[names]
-    names = {"phonemes": "n_phon", "consonants": "n_cons", "vowels": "n_vow"}
-
-    return pl.from_pandas(phoible).rename(names)
-
-
-@lru_cache
-def get_languages(file: Path | str = Path("out", "languages.csv")) -> pl.DataFrame:
-    glottolog = get_glottolog()
-    phoible = get_phoible()
-    wikidata_path = Path("data/wikidata.csv")
-    wikidata = pl.read_csv(wikidata_path) if wikidata_path.exists() else get_wikidata()
-    wikidata = wikidata.select(["iso639p3code", "n_speakers"])
-
-    cols_select = [
-        "iso639p3code",
-        "lang",
-        "glottocode",
-        "n_speakers",
-        "family_id",
-        "latitude",
-        "longitude",
-        "n_phon",
-        "n_cons",
-        "n_vow",
-    ]
-    df = (
-        glottolog.join(wikidata, on=["iso639p3code"], how="left")
-        .join(phoible, on=["glottocode"], how="left")
-        .select(cols_select)
-        .sort("iso639p3code")
-    )
-
-    file = Path(file)
-    if file:
-        df.write_csv(file)
-
-    return df
 
 
 def _scrape_lang_wrapper(lang: str, conf: Config, path: Path = Path("data", "raw")):
