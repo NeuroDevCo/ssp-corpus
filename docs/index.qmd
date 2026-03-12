@@ -1,9 +1,20 @@
+## Introduction
+
+* Sonority is very important
+* The SSP.
+* The SSP is claimed to be a linguistic universal, but its statistical prevalence across and within languages is unclear.
+* Prevalence of SSP in langages syllabic repertoire?
+* Prevalence of SSP in adult-directed speech corpora? (SUBTLEX lexical frequencies)
+* Prevalence of SSP in infant-directed speech corpora? (CHILDES lexical frequencies)
+* Grouping by language family?
+
 
 ## Method
 
 ```{python}
 from pathlib import Path
 import sys
+from whoosh.lang.lovins import O
 
 from great_tables import GT, md, html, from_column, style, loc
 from matplotlib import pyplot as plt
@@ -22,6 +33,7 @@ OUT_PATH: Path = Path("out")
 languages = pl.read_parquet(OUT_PATH / "languages.parquet")
 words = pl.read_parquet(OUT_PATH / "words.parquet")
 syllables = pl.read_parquet(OUT_PATH / "syllables.parquet")
+data = pl.read_parquet(OUT_PATH / "data.parquet")
 
 n_eff_langs_words = len(words.unique("iso639p3code"))
 n_eff_langs_syllables = len(syllables.unique("iso639p3code"))
@@ -54,6 +66,14 @@ y_{[j]i} &\sim \text{Binomial}(n_i, \frac{\theta_{[j]i}}{1 - \theta_{[j]i}}) \\
 \end{aligned}
 $$ {#eq-model}
 
+$$
+y_i \sim \text{Binomial}(n_i, \text{logit}^{-1}(\alpha))
+$$
+
+$$
+y_i \sim \text{Binomial}(n_i, \text{logit}^{-1}(\alpha + \eta_{j[i]}))
+$$
+
 ## Results
 
 ![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 95% highest density interval (HDI). Means and 95% HDI are also numerically reported next to each language family.](../img/estimates.png){#fig-estimates-family}
@@ -65,29 +85,29 @@ $$ {#eq-model}
 # | label: tbl-proportions
 # | tbl-cap: "Observed proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language."
 
-npron = words.group_by("lang").agg(pl.len().alias("n_pron"))
+npron = words.group_by(["iso639p3code"]).agg(pl.len().alias("n_pron"))
 tbl = (
-    data.join(npron, on="lang")
+    data.join(languages, on="iso639p3code", how="left")
     .with_columns(
-        pl.col("family_name")
-        .replace_strict(figures.get_color_codes(), default="black")
+        pl.col("iso639p3code")
+        .replace_strict(figures.get_color_codes(languages), default="black")
         .alias("color"),
     )
-    .select(["language_name", "family_name", "n_pron", "n", "prop", "color"])
-    .sort("family_name")
+    .select(["lang", "iso639p3code", "family_id", "n", "prop", "color"])
+    .sort("prop")
 )
 
 (
     GT(tbl)
     .fmt_percent(columns=["prop"])
-    .fmt_integer(columns=["n", "n_pron"])
+    .fmt_integer(columns=["n"])
     .tab_style(style=style.text(size="small"), locations=loc.body())
     .cols_label(
         {
-            "language_name": "Language",
-            "family_name": "Language family",
+            "lang": "Language",
+            "iso639p3code": "ISO",
+            "family_id": "Language family",
             "prop": "SSP (%)",
-            "n_pron": "# Words",
             "n": "# Syllables",
         }
     )

@@ -1,7 +1,10 @@
 """Create figures."""
 
+import cmdstanpy
+
 from pathlib import Path
 
+import arviz_stats as az_stats
 from matplotlib import pyplot as plt
 from matplotlib import colors as cm
 from matplotlib.colors import Colormap
@@ -13,7 +16,9 @@ import polars as pl
 from src import scraping
 
 
-def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]:
+def get_color_codes(
+    languages: pl.DataFrame, cmap: str = "rainbow", alpha: float = 1.0
+) -> dict[str, str]:
     """Assign color to each language family.
 
     Args:
@@ -24,19 +29,15 @@ def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]
     Returns:
         dict: Language family and hex color pairs.
     """
-    lang = (
-        scraping.get_languages()
-        .unique("family_name")
-        .select("family_name")
-        .sort("family_name")
-    )
-    f = lang.get_column("family_name").sort().to_list()
+    lang = languages.unique("family_id").select("family_id").sort("family_id")
+    f = lang.get_column("family_id").sort().to_list()
     cmap: Colormap = plt.get_cmap(cmap)
     vals = cmap(np.linspace(0, 1, len(f)), alpha=alpha)
     return {k: cm.rgb2hex(v, keep_alpha=True) for k, v in zip(f, vals)}
 
 
 def plot_structures(
+    languages: pl.DataFrame,
     datapath: str | Path = Path("out", "syllables.csv"),
     file: Path | str = Path("img", "structures.png"),
 ):
@@ -256,6 +257,50 @@ def plot_map(data: pl.DataFrame):
     fig.add_artist(legend_pron)
     fig.tight_layout(pad=1, w_pad=1)
     fig.savefig(Path("img", "map.png"), dpi=1e3, bbox_inches="tight")
+
+
+def plot_model_rank(model: cmdstanpy.CmdStanMCMC):
+    fig, axes = plt.subplots(1, 2)
+
+    az_stats.plot_ecdf_pit(idata, var_names="theta")
+
+    fig.suptitle("Rank (All Chains)")
+
+
+def plot_model_hist(x: cmdstanpy.CmdStanMCMC, data: dict):
+    params = ["theta"]
+    draws = (
+        pl.from_pandas(x.draws_pd(vars=params))
+        .with_row_index("ndraw")
+        .unpivot(variable_name="param", index="ndraw")
+    )
+    lookup = params
+    if "group_labels" in data:
+        lookup = {str(v - 1): k for k, v in data["group_labels"].items()}
+
+        draws = draws.with_columns(
+            pl.col("param")
+            .str.replace_all(f"\\[|\\]|{'|'.join(params)}", "")
+            .replace_strict(lookup, default=pl.col("param"))
+        )
+        lookup = lookup.values()
+    mean = draws["value"].mean()
+    lower, upper = az_stats.hdi(draws["value"].to_numpy(), prob=0.89)
+
+    fig, axes = plt.subplots(1, 1)
+    for group in lookup:
+        d = draws.filter(pl.col("param") == group)
+        axes.hist(d["value"], bins=100, histtype="step", lw=2, label=group)
+        axes.errorbar(x=mean, y=50, xerr=upper - lower, c="k", lw=2)
+        axes.scatter(x=mean, y=50, c="k", s=50)
+        axes.text(
+            x=mean,
+            y=80,
+            s=f"{mean:.3f} [{lower:.3f}, {upper:.3f}]",
+            ha="center",
+            va="bottom",
+        )
+    fig.legend()
 
 
 if __name__ == "__main__":

@@ -65,9 +65,9 @@ def get_phoible() -> pl.DataFrame:
     phoible.show_citation = False
     phoible = pl.from_pandas(phoible.get_df()[names]).unique("glottocode")
     names = {
-        "phonemes": "n_phon",
-        "consonants": "n_cons",
-        "vowels": "n_vow",
+        "phonemes": "phon_size_all",
+        "consonants": "phon_size_c",
+        "vowels": "phon_size_v",
     }
 
     return phoible.rename(names)
@@ -84,9 +84,9 @@ def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.Dat
         "family_id",
         "latitude",
         "longitude",
-        "n_phon",
-        "n_cons",
-        "n_vow",
+        "phon_size_all",
+        "phon_size_c",
+        "phon_size_v",
     ]
     df = (
         glottolog.join(phoible, on=["glottocode"], how="left")

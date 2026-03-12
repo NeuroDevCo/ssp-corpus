@@ -1,36 +1,45 @@
 """Model SSP prevalence."""
 
 from collections.abc import Sequence
+from json import dump
 from pathlib import Path
 
 import arviz as az
+import arviz_stats as az_stats
 from cmdstanpy import CmdStanModel, stanfit
 import numpy as np
 import polars as pl
-
-from src import scraping
+import xarray as xr
 
 RANDOM_SEED: int = 1234
 rng = np.random.default_rng(RANDOM_SEED)
 
 
 def prepare_data(
-    data: pl.DataFrame,
-    by: str | Sequence[str] | None = None,
-    languages: pl.DataFrame | None = None,
+    syllables: pl.DataFrame,
+    languages: pl.DataFrame,
+    by: str | list[str] = "iso639p3code",
+    file: Path | str = Path("out/data.parquet"),
 ) -> pl.DataFrame:
     """Aggregate data to get the proportion of SSP vollowing syllables by
-    group."""
-    if by is None:
-        by = ["iso639p3code", "family_id", "lang"]
+    group.
 
-    if languages is None:
-        languages = scraping.get_languages()
-    languages = languages.select(pl.col(by))
+    Args:
+        syllables (pl.DataFrame): Syllable dataframe to aggregate.
+        languages (pl.DataFrame): Language dataframe.
+        by (str | Sequence, optional): Variables to group the aggregates by. Defaults to None.
+        file (str | Path, optional): Path to the generated parquet file. Defaults to `Path("out/data.parquet")`.
 
-    return (
-        data.join(languages, on="iso639p3code")
-        .drop_nulls(["family_id"])
+    Returns:
+        pl.DataFrame: Aggregated data, ready for modelling.
+    """
+    if isinstance(by, str):
+        by = [by]
+
+    join_cols = set(languages.columns).intersection(set(syllables.columns))
+    df = (
+        syllables.join(languages, on=list(join_cols), how="inner")
+        .drop_nulls(by)
         .group_by(by)
         .agg(
             pl.len().alias("n"),
@@ -38,6 +47,12 @@ def prepare_data(
             pl.sum("is_ssp").alias("sum"),
         )
     )
+
+    file = Path(file)
+    if file:
+        df.write_parquet(file)
+
+    return df
 
 
 def get_group_indices(x: Sequence[str]) -> dict[str, int]:
@@ -57,13 +72,12 @@ def fit_model(
     data: pl.DataFrame,
     y_var: str = "sum",
     n_var: str = "n",
-    group_var: str = "family_id",
+    group_var: str | None = None,
     n_samples: int = 4_000,
     n_chains: int = 8,
-    file: Path | str = Path("model", "model.stan"),
-    outpath: Path | str | None = None,
+    file: Path | str | None = None,
     **kwargs,
-) -> tuple[stanfit.CmdStanMCMC, dict]:
+) -> tuple[stanfit.CmdStanMCMC, stanfit.CmdStanMCMC, dict]:
     """Fit Bayesian multilevel model with a Binomial distribution in CmdStanPy.
 
     Args:
@@ -81,43 +95,91 @@ def fit_model(
         stanfit.CmdStanMCMC: Posterior MCMC samples.
         dict: Stan data.
     """
-    file = Path(file)
+    y, n = [data[v].to_numpy() for v in (y_var, n_var)]
+    stan_file = Path("model/model.stan")
+    d = {"N": len(y), "n": n, "y": y}
 
-    d = data.sort(group_var)
-    y, n = [d[v].to_numpy() for v in (y_var, n_var)]
-    lookup = get_group_indices(d[group_var].to_list())
-    groups = d[group_var].unique().to_numpy()
-    group_idx = [lookup[g] for g in d[group_var]]
+    if group_var:
+        lookup = get_group_indices(data[group_var].to_list())
+        groups = data[group_var].unique().to_numpy()
+        group_idx = [lookup[g] for g in data[group_var]]
+        stan_file = Path("model/model_groups.stan")
+        d.update({"J": len(groups), "j": group_idx, "group_labels": lookup})
 
-    d = {
-        "N": len(y),
-        "n": n,
-        "y": y,
-        "J": len(groups),
-        "j": group_idx,
-        "group_labels": lookup,
-    }
+    m = CmdStanModel(stan_file=stan_file)
 
-    m = CmdStanModel(stan_file=file)
+    prior_fit = m.sample(
+        data=d,
+        fixed_param=True,  # sample from priors only
+        iter_sampling=int(n_samples // 1.25),
+        iter_warmup=int(n_samples // 4),
+        seed=RANDOM_SEED,
+        chains=n_chains,
+        parallel_chains=n_chains,
+    )
 
     fit = m.sample(
         data=d,
         step_size=0.1,
-        iter_sampling=n_samples // 2,
-        iter_warmup=n_samples // 2,
+        iter_sampling=int(n_samples // 1.25),
+        iter_warmup=int(n_samples // 4),
         seed=RANDOM_SEED,
         chains=n_chains,
         parallel_chains=n_chains,
         **kwargs,
     )
 
-    if outpath:
-        fit.save_csvfiles(str(outpath))
-    return fit, d
+    if file:
+        fit.save_csvfiles(str(file))
+
+    return fit, prior_fit, d
+
+
+def serialize(x):
+    if x is None:
+        return
+
+    if isinstance(x, np.int64):
+        return float(x)
+    elif isinstance(x, xr.DataArray | xr.Dataset):
+        if not len(x):
+            return []
+        return np.ndarray(x)
+    elif isinstance(x, np.ndarray):
+        return list(x)
+    else:
+        return str(x)
+
+
+def diagnose_model(
+    fit: stanfit.CmdStanMCMC,
+    which: str | Sequence[str] | None = None,
+    file: Path | str = Path("model/diagnostics.json"),
+):
+    idata = az.from_cmdstanpy(fit)
+    is_ok, diag = az_stats.diagnose(
+        idata, show_diagnostics=False, return_diagnostics=True
+    )
+
+    if isinstance(which, str):
+        which = [which]
+
+    if which:
+        diag = {k: v for k, v in diag.items()}
+
+    with Path(file).open(mode="w") as f:
+        dump(diag, f, default=lambda o: serialize(o))
+
+    return is_ok, diag
 
 
 def summarize_posterior(
-    fit: stanfit.CmdStanMCMC, stan_data: dict, width: float = 0.95
+    fit: stanfit.CmdStanMCMC,
+    stan_data: dict,
+    param: str = "alpha",
+    width: float = 0.95,
+    file: Path | str = Path("out", "posterior-families.parquet"),
+    **kwargs,
 ) -> pl.DataFrame:
     """Summarize posterior of the model.
 
@@ -129,26 +191,108 @@ def summarize_posterior(
     Returns:
         stanfit.CmdStanMCMC: Summarised posterior.
     """
-    hdi_names = np.array(((1 - width) / 2, 1 - (1 - width) / 2)) * 100
-    hdi_names = np.round(hdi_names, decimals=2)
-    hdi_names = {f"hdi_{h}%": i for h, i in zip(hdi_names, ("lower", "upper"))}
     idata = az.from_cmdstanpy(fit)
-    p = az.summary(idata, ci_prob=width, var_names=["theta"])
-    p.reset_index("param")
+    p = az_stats.summary(idata, ci_prob=width, ci_kind="hdi", **kwargs)
+    p.index.set_names(["param"], inplace=True)
+    p.reset_index(inplace=True)
 
-    lookup = {str(v - 1): k for k, v in stan_data["group_labels"].items()}
-    draws = (
-        pl.DataFrame(pl.from_pandas(p))
-        .rename({"hdi_2.5%": "lower", "hdi_97.5%": "upper"})
-        .with_columns(
+    draws = pl.DataFrame(pl.from_pandas(p)).filter(
+        pl.col("param").str.starts_with(param)
+    )
+
+    if "group_labels" in stan_data:
+        lookup = {str(v - 1): k for k, v in stan_data["group_labels"].items()}
+        draws = draws.with_columns(
             pl.col("param")
-            .str.replace_all("\\[|\\]|theta", "")
-            .replace_strict(lookup, default=None),
-            pl.col(["mean", "sd", "lower", "upper"]).map_elements(
-                lambda x: 1 / (1 + np.exp(-x)), return_dtype=pl.Float64
-            ),
+            .str.replace_all(f"\\[|\\]|{param}", "")
+            .replace_strict(lookup, default=pl.col("param"))
         )
-        .drop_nulls()
+
+    float_cols = [c for c in draws.columns if c != "param"]
+    int_cols = [c for c in draws.columns if c.startswith("ess")]
+    draws = (
+        draws.with_columns(pl.col(float_cols).cast(pl.Float64))
+        .with_columns(pl.col(int_cols).cast(pl.Float64))
         .sort("mean", descending=True)
     )
+
+    if file:
+        file = Path(file)
+
     return draws
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+
+    import arviz as az
+    import arviz_plots as azp
+    import arviz_stats as azs
+    from cmdstanpy import CmdStanModel
+    from matplotlib import pyplot as plt
+    import numpy as np
+    import polars as pl
+    import xarray as xr
+
+    RANDOM_SEED: int = 1234
+    rng = np.random.default_rng(RANDOM_SEED)
+
+    N: int = 100
+
+    iso639p3code = range(N)
+    family_id = np.random.choice(range(N // 10))
+    n = np.random.randint(100, 5_000, size=N)
+
+    PROP = 0.5
+    PROP_SD = 0.2
+    prop = np.random.normal(PROP, PROP_SD, N)
+    y = np.array([np.random.binomial(n, p, 1) for p in prop]).T
+    data = {"iso639p3code": iso639p3code, "family_id": family_id, "n": n, "sum": y}
+
+    df = pl.DataFrame(data)
+    stan_data = {"N": len(y), "n": n, "y": y}
+
+    stan_file = Path("model/model.stan")
+    model = CmdStanModel(stan_file=stan_file)
+
+    samples_prior = model.sample(
+        data=data,
+        fixed_param=True,
+        iter_sampling=1_000,
+        iter_warmup=1_000,
+        seed=RANDOM_SEED,
+        chains=8,
+        parallel_chains=8,
+    )
+
+    samples = model.sample(
+        data=data,
+        iter_sampling=1_000,
+        iter_warmup=1_000,
+        seed=RANDOM_SEED,
+        chains=8,
+        parallel_chains=8,
+    )
+
+    idata = az.from_cmdstanpy(
+        posterior=samples,
+        prior=samples_prior,
+        posterior_predictive="y_rep",
+        prior_predictive="y_rep_prior",
+        observed_data={"y": data["y"]},
+    )
+
+    az.plot_ppc(
+        idata, data_pairs={"obs": "obs"}, alpha=0.03, figsize=(12, 6), textsize=14
+    )
+
+    posterior = az.extract(idata, group="posterior", var_names="theta", combined=True)
+    posterior_hdi = azs.hdi(idata)
+    posterior_mean = posterior.mean("sample")
+
+    fig, ax = plt.subplots(1, 2)
+    ax[0].hist(idata.observed_data, density=True, stacked=True)
+    ax[1].hist(prop, color="tab:red", density=True, stacked=True)
+
+    # az.plot_trace(idata, var_names="alpha", compact=False)
+    pc = azp.plot_ppc_dist(idata, group="y_rep", kind="hist")

@@ -1,21 +1,32 @@
 data {
-	int<lower=1> N; // number of observations
-	int<lower=1> J; // number of groups
-	array[N] int<lower=0> n; // number of trials per observation
-	array[N] int<lower=0> y; // number of successes, out of the n trials
-	array[N] int<lower=1, upper=J> j; // index of group
+  int<lower=1> N; // number of observations
+  array[N] int<lower=1> n; // number of trials per observation
+  array[N] int<lower=0> y; // number of successes
 }
-
 parameters {
-	vector[J] theta; // group-level intercept
-	real mu_j; // probability across groups
-	real<lower=0> sigma_j; // SD of group-level intercepts
+  real<lower=0> alpha; // Alpha parameter of Beta distribution
+  real<lower=0> beta; // Beta parameter of Beta distribution
 }
-
-
+transformed parameters {
+  real mu = alpha / (alpha + beta);
+}
 model {
-	y ~ binomial_logit(n, theta[j]);
-	theta ~ normal(mu_j, sigma_j);
-	mu_j ~ student_t(3, 0, 2.5);
-	sigma_j ~ exponential(4);
+  // weakly informative priors 
+  alpha ~ normal(0, 2);
+  beta ~ normal(0, 2);
+  y ~ beta_binomial(n, alpha, beta);
+}
+generated quantities {
+  vector[N] log_lik;
+  vector[N] y_rep;
+  vector[N] theta_rep;
+  vector[N] y_prior;
+  
+  // Generate predictions for every observation
+  for (i in 1 : N) {
+    // beta_binomial_rng(trials, alpha, beta)
+    y_rep[i] = beta_binomial_rng(n[i], alpha, beta);
+    theta_rep[i] = y_rep[i] / n[i];
+    log_lik[i] = beta_binomial_lpmf(y[i] | n[i], alpha, beta);
+  }
 }
