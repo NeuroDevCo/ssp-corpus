@@ -9,6 +9,8 @@ parameters {
 }
 transformed parameters {
   real mu = alpha / (alpha + beta);
+  real phi = alpha + beta; // Precision parameter
+  real theta = alpha / (alpha + beta); // Global proportion of success
 }
 model {
   // weakly informative priors 

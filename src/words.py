@@ -1,13 +1,15 @@
+from jinja2.nodes import With
 from collections.abc import Sequence
 from pathlib import Path
+from tempfile import tempdir
 
 from iso639 import Language
 import polars as pl
 from rich.progress import track
 from wordfreq import zipf_frequency
 
-from src import languages
-from src.utils import add_lang_col, benchmark, cast_to_str
+from src.languages import get_languages
+from src.utils import add_lang_col, benchmark
 
 IN_PATH: Path = Path("data/raw")
 OUT_PATH: Path = Path("data/processed/words")
@@ -26,26 +28,41 @@ def get_frequencies(
     x: pl.DataFrame,
     file: Path | str = Path("out/frequencies.parquet"),
     reload: bool = True,
+    buffer_size: int = 10_000,
     **kwargs,
 ):
-
     file = Path(file)
-    if file.exists() and reload:
+    if file.exists():
         return pl.read_parquet(file)
 
-    words = x["word"].to_list()
-    lang_p3 = x["iso639p3code"].to_list()
-    lang_p1 = [iso639_p3_to_p1(p3) for p3 in lang_p3]
+    langs_lookup = {p3: iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())}
 
-    def get_freq(word: str, lang: str, **kwargs):
-        try:
-            return zipf_frequency(word, lang, **kwargs)
-        except LookupError:
-            return
+    df = (
+        x.with_columns(
+            pl.col("iso639p3code").replace(langs_lookup).alias("iso639p1code")
+        )
+        .select(["iso639p1code", "iso639p3code", "word"])
+        .unique(["iso639p3code", "word"])
+    )
 
-    freqs = [get_freq(w, lang) for w, lang in zip(words, lang_p1) if lang]
+    temp_file = Path(str(tempdir)) / "frequencies.txt"
+    msg = f"FREQS: {len(df):,} words"
+    with temp_file.open("w+") as f:
+        f.write(",".join(["word", "iso639p3code", "freq"]) + "\n")
 
-    df = pl.DataFrame({"lang": lang_p3, "word": words, "freq": freqs})
+        for p1, p3, w in track(df.iter_rows(named=False), msg, len(df)):
+            if not p1:
+                continue
+            try:
+                freq = zipf_frequency(w, p1)
+            except LookupError:
+                continue
+            if not freq:
+                continue
+            data = ",".join([w, p3, str(freq) if freq else ""])
+            f.write(data + "\n")
+
+    df = pl.read_csv(temp_file).sort(pl.col(["iso639p3code", "freq"]))
     df.write_parquet(file)
     return df
 
@@ -65,55 +82,75 @@ def get_lang_words(
     file = Path(file)
 
     if syll_boundaries is None:
-        syll_boundaries = [r".", "ˈ", "ˌ"]
+        syll_boundaries = [".", "ˈ", "ˌ"]
     elif isinstance(syll_boundaries, str):
         syll_boundaries = [syll_boundaries]
 
     df = (
         pl.scan_csv(file)
         .unique("phon")
+        .with_columns(pl.col("phon").str.replace_all(" ", ""))
         .with_columns(
             pl.col("phon")
-            .str.replace_all(" ", "")
-            .str.replace_many({b: "." for b in syll_boundaries})
-            .str.strip_chars("."),
-            pl.col("phon")
-            .str.split(".")
-            .list.eval(pl.element().filter(pl.element() != ""))
-            .alias("syll"),
-            pl.col("phon").str.len_chars().alias("n_phon"),
+            .str.replace_many(list(syll_boundaries), ["_"])
+            .str.strip_chars("_")
+            .alias("phon_tmp")
         )
         .with_columns(
+            pl.col("phon_tmp")
+            .str.split(r"_")
+            .list.eval(pl.element().filter(pl.element() != ""))
+            .alias("syll")
+        )
+        .with_columns(
+            pl.col("phon_tmp").str.replace_all("_", "").str.len_chars().alias("n_phon"),
             pl.col("syll").list.len().alias("n_syll"),
         )
+        .select(["word", "phon", "syll", "n_phon", "n_syll"])
         .collect()
     )
 
     return pl.DataFrame(df)
 
 
-def get_words(x: pl.DataFrame, min_words: int = 100):
+def get_words(
+    languages: pl.DataFrame | None = None,
+    add_frequencies: bool = True,
+    min_words: int = 100,
+):
+    if languages is None:
+        languages = get_languages()
+
     words = []
 
     OUT_PATH.mkdir(parents=True, exist_ok=True)
-
-    msg = f"WORDS: Preprocessing {len(x)} languages"
-    for lang in track(x["iso639p3code"].to_list(), msg, len(x)):
+    n_lang = len(languages)
+    msg = f"WORDS: {n_lang:,} languages"
+    for lang in track(languages["iso639p3code"].to_list(), msg, n_lang):
         try:
             df = add_lang_col(get_lang_words(IN_PATH / f"{lang}.csv"), lang)
+            df = df.unique(["word", "phon", "iso639p3code"])
+
             if len(df) < min_words:
                 continue
             words.append(df)
             df.write_parquet(OUT_PATH / f"{lang}.parquet")
         except (FileNotFoundError, pl.exceptions.NoDataError):
             continue
+
     words = pl.concat(words) if len(words) > 0 else pl.DataFrame()
+
+    if add_frequencies:
+        freqs = get_frequencies(words)
+        on = list(set(words.columns).intersection(freqs.columns))
+        words = words.join(freqs, on=on, how="left")
+
     words.write_parquet(Path("out/words.parquet"))
 
     return words
 
 
 if __name__ == "__main__":
-    LANGS = languages.get_languages()
-    WORDS = get_words(LANGS)
-    FREQS = get_frequencies(WORDS)
+    langs = get_languages()
+    words = get_words(langs)
+    freqs = get_frequencies(words)

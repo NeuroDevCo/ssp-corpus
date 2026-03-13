@@ -1,15 +1,14 @@
-from collections.abc import Sequence
 from functools import lru_cache
 from itertools import groupby
 from pathlib import Path
+from warnings import warn
 
 from iso639 import Language
-import numpy as np
 from panphon import FeatureTable, sonority
 import polars as pl
 from rich.progress import track
 
-from src import languages, words
+from src.words import get_words
 from src.utils import benchmark
 
 IN_PATH: Path = Path("data/raw")
@@ -141,26 +140,27 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
     Returns:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
-    syllables = x["phon"].to_list()
+    syllables = x.explode("syll")
+    syll = syllables["syll"].to_list()
 
     valid_indices = []
     processed_structs = []
     processed_sonority = []
     ssp = []
 
-    for i, syl in enumerate(syllables):
-        if not syl:
+    for i, s in enumerate(syll):
+        if not s:
             continue
 
         # TODO: figure out better handling of vocalic clusters
-        struct = classify_segments(syl)
+        struct = classify_segments(s)
 
         # must have exactly 1 vocalic cluster
         if count_clusters(struct, "V") != 1:
             continue
 
         sonority = get_sonority()
-        son = [sonority.get(s, 0) for s in syl if s in sonority]
+        son = [sonority.get(s, 0) for s in s if s in sonority]
         if not son:
             continue
 
@@ -172,7 +172,7 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
     if not valid_indices:
         return x[:0].clear()  # return empty DataFrame with same schema
 
-    df = x[valid_indices]
+    df = syllables[valid_indices]
 
     return df.with_columns(
         pl.Series("struct", processed_structs),
@@ -182,14 +182,25 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
 
 
 @benchmark
-def get_syllables(x: pl.DataFrame, min_syll: int = 20) -> pl.DataFrame:
+def get_syllables(
+    words: pl.DataFrame | None = None,
+    min_syll: int = 20,
+    add_frequencies: bool = False,
+) -> pl.DataFrame:
     """Main script."""
-
+    if words is None:
+        words = get_words()
+    if add_frequencies and "freq" not in words.columns:
+        warn("No frequencies found in dataset")
+        add_frequencies = False
     syll = []
 
+    if add_frequencies:
+        words = words.drop_nulls("freq")
+
     # TODO: iterate over split polars dataframes instead of filenames
-    part_words = x.partition_by("iso639p3code")
-    msg = f"SYLLABLES: Preprocessing {len(part_words)} languages"
+    part_words = words.partition_by("iso639p3code")
+    msg = f"SYLLABLES: {len(part_words):,} languages"
     for lang_words in track(part_words, msg, len(part_words)):
         try:
             df = get_lang_syllables(lang_words)
@@ -204,12 +215,22 @@ def get_syllables(x: pl.DataFrame, min_syll: int = 20) -> pl.DataFrame:
             print(e)
 
     syll = pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
+    cols_keep = ["iso639p3code", "syll", "struct", "sonority", "is_ssp"]
+
+    if add_frequencies:
+        syll = syll.group_by(cols_keep).agg(pl.col("freq").sum())
+        cols_keep += ["freq"]
+    else:
+        syll = syll.unique(["iso639p3code", "syll"])
+
+    syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
     syll.write_parquet(Path("out/syllables.parquet"))
 
     return syll
 
 
 if __name__ == "__main__":
-    LANGS = languages.get_languages()
-    WORDS = words.get_words(LANGS)
-    SYLL = get_syllables(WORDS)
+    langs = pl.read_parquet(Path("out/languages.parquet"))
+    words = get_words(langs)
+    sylls = get_syllables(words)
+    sylls_freq = get_syllables(words, add_frequencies=True)
