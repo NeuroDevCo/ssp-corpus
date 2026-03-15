@@ -42,13 +42,9 @@ def get_glottolog() -> pl.DataFrame:
         .rename({"name": "lang"})
         .with_columns(
             pl.when(pl.col("is_isolate"))
-            .then(pl.lit("isolate"))
-            .otherwise("family_name")
-            .alias("family_id"),
-            pl.when(pl.col("is_isolate"))
             .then(pl.lit("Isolate"))
             .otherwise("family_name")
-            .alias("family_name"),
+            .alias("family_id"),
         )
         .select(cols)
         .collect()
@@ -101,4 +97,4 @@ def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.Dat
 
 
 if __name__ == "__main__":
-    LANG = get_languages()
+    langs = get_languages()

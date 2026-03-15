@@ -64,7 +64,10 @@ def scrape_language(lang: str, path: Path | str = Path("data", "raw")):
 
 
 def get_scraped_languages(
-    path: Path | str = Path("data", "raw"), keep_empty: bool = False
+    path: Path | str = Path("data", "raw"),
+    keep_empty: bool = False,
+    min_size: int = 1_000,
+    extension: str = ".csv",
 ) -> list[str]:
     """Evaluate is language has already been scraped.
 
@@ -74,16 +77,18 @@ def get_scraped_languages(
     Args:
         path (Path | str, optional): Path to raw data. Defaults to ``Path("data", "raw")``.
         keep_empty (bool, optional): Should languages with no pronunciations available be included in the output? Defaults to False.
+        min_size (int, optional): Number of minimum bits for a file to be considered non-empty. Defaults to 1_000.
+        extension (str, optional): File extension to look for. Defaults to ".csv".
 
     Returns:
         list[str]: List of scraped languages.
     """
-    files = Path(path).glob("*.csv")
+    files = Path(path).glob("*" + extension)
 
     if keep_empty:
         return [f.stem for f in files]
 
-    return [f.stem for f in files if f.stat().st_size > 1e3]
+    return [f.stem for f in files if f.stat().st_size > min_size]
 
 
 def scrape_all_languages():

@@ -1,5 +1,3 @@
-from jinja2.nodes import With
-from collections.abc import Sequence
 from pathlib import Path
 from tempfile import tempdir
 
@@ -68,7 +66,7 @@ def get_frequencies(
 
 
 def get_lang_words(
-    file: Path | str, syll_boundaries: Sequence[str] | str | None = None
+    file: Path | str, syll_boundaries: list[str] | None = None
 ) -> pl.DataFrame:
     """Preprocess word forms of a language corpus.
 

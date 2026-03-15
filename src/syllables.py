@@ -1,41 +1,20 @@
-from functools import lru_cache
-from itertools import groupby
 from pathlib import Path
 from warnings import warn
 
-from iso639 import Language
-from panphon import FeatureTable, sonority
+from iso639 import Language, LanguageNotFoundError
+import numpy as np
+from panphon import FeatureTable
+from panphon.sonority import Sonority
 import polars as pl
 from rich.progress import track
-
-from src.words import get_words
-from src.utils import benchmark
 
 IN_PATH: Path = Path("data/raw")
 OUT_PATH: Path = Path("data/processed/syllables")
 
 
-FT = FeatureTable()
-S = sonority.Sonority()
-
-
-@lru_cache
-def get_sonority() -> dict[str, int]:
-    return {s: S.sonority(s) for s in FT.seg_dict if s.strip()}
-
-
-@lru_cache
-def get_classified_segments(other: str = "") -> dict[str, str]:
-    out = {}
-    for seg, data in FT.seg_dict.items():
-        if data["cons"] == 1:
-            out[seg] = "C"
-        elif data["syl"] == 1:
-            out[seg] = "V"
-        else:
-            out[seg] = other
-
-    return out
+FT = FeatureTable().seg_dict
+SON_ALL = Sonority()
+SON = {s: SON_ALL.sonority(s) for s in FT if s.strip()}
 
 
 def count_clusters(x: str, symbol: str = "V") -> int:
@@ -44,7 +23,7 @@ def count_clusters(x: str, symbol: str = "V") -> int:
 
     Args:
         x (str): Word-form to count the number of clusters of.
-        symbol (str): Symbol to look for to identify instances of the segment type.
+        symbol (str, optional): Symbol to look for to identify instances of the segment type. Defaults to "V" (vowels).
 
     Raises:
         ValueError: If `symbol` is not of length 1.
@@ -55,40 +34,39 @@ def count_clusters(x: str, symbol: str = "V") -> int:
     if len(symbol) != 1:
         raise ValueError("`symbol` must of of length 1")
 
-    return len([b for a, b in groupby(x) if a == symbol])
+    return list(x).count(symbol)
 
 
-def has_one_peak(seq):
+def has_one_peak(x: list[int] | np.ndarray) -> bool:
     """
     Determine whether a sequence contains at most one strict local maximum.
 
-    A strict local maximum is defined as an element that is greater than its
-    immediate neighbours. For the first and last elements, they are considered
-    maxima if they are greater than their only neighbour.
+    Notes:
+        A strict local maximum is defined as an element that is greater than its immediate neighbours. For the first and last elements, they are considered maxima if they are greater than their only neighbour.
 
-    The function returns True when the number of such maxima is 0 or 1,
-    and False when there are two or more.
+    Returns:
+        bool: True if the number of maxima is 0 or 1, False when there are two or more.
 
     Examples:
-    >>> has_only_one_maximum([1, 2, 3, 2, 1])
-    True
-    >>> has_only_one_maximum([1, 2, 1, 2, 1])
-    False
-    >>> has_only_one_maximum([5, 5, 5])
-    True
-    >>> has_only_one_maximum([])
-    True
-    >>> has_only_one_maximum([42])
-    True
+        >>> has_only_one_maximum([1, 2, 3, 2, 1])
+        True
+        >>> has_only_one_maximum([1, 2, 1, 2, 1])
+        False
+        >>> has_only_one_maximum([5, 5, 5])
+        True
+        >>> has_only_one_maximum([])
+        True
+        >>> has_only_one_maximum([42])
+        True
     """
-    n = len(seq)
+    n = len(x)
     if n == 0:
         return True
 
     count = 0
     for i in range(n):
-        left_ok = (i == 0) or (seq[i] > seq[i - 1])
-        right_ok = (i == n - 1) or (seq[i] > seq[i + 1])
+        left_ok = (i == 0) or (x[i] > x[i - 1])
+        right_ok = (i == n - 1) or (x[i] > x[i + 1])
         if left_ok and right_ok:
             count += 1
             if count > 1:
@@ -96,17 +74,61 @@ def has_one_peak(seq):
     return True
 
 
-def classify_segments(x: str, **kwargs) -> str:
+def classify_segments(x: str, on_missing: str = "skip") -> str:
     """
-    Classify segments in a word form using precomputed `CV_MAP`.
+    Classify segments in a word form into consonants (C), vowels (V), and semi-vowels (v).
+
+    Note:
+        This function uses Panphon's segment features to classify segments into consonants and vowels. It loops through each segment in the sequence, and makes the following decissions:
+
+
+        1) If the segment is syllabic (can act as syllable nucleus), it is classified as a vowel. If the segment is consonantal, it is classified as a consonant. The iteration is finished.
+        2) If the segment is not syllabic nor consonantal, it is considered a glide or semi-vowel. Following Ramus et al. (1999), the following decissions are made in order:
+            2.1) If the segment is the first of the sequence, it is classified as a glide, therefore consonant.
+            2.2) If the segment is the last of the sequence, it is classified as a semi-vowel.
+            2.3) If the previous segment was classified as a vowel, the segment is classified as a semi-vowel.
+            2.4) If the previous segment was classified as a consonant, the segment is classified as a glide, therefore a consonant.
+
 
     Args:
         x (str): Sequence of segments to classify.
+        on_missing (str, optional): What should happen if a segment is not found in the Panphon features table? If "error", an error is raised. If "warning", a warning is displayed and the segment is skipped. If "skip" (default), the segment is simply skipped.
 
     Return:
         str: Sequence of classified segments.
     """
-    return "".join([get_classified_segments(**kwargs).get(s, "") for s in x])
+    if on_missing not in ["error", "warning", "skip"]:
+        raise ValueError("`on_missing` must be one of 'error', 'warning', or 'skip'")
+
+    out = ""
+    for i, segment in enumerate(x):
+        features = FT.get(segment)
+        if features is None:
+            msg = f"Segment {segment} missing from features table"
+            if on_missing == "error":
+                raise KeyError(msg)
+            if on_missing == "warn":
+                warn(msg)
+            continue
+        elif features.get("syl") == 1:
+            out += "V"
+        elif features.get("cons") == 1:
+            out += "C"
+        else:
+            if i == 0:
+                out += "C"
+            elif i == len(x) - 1:
+                out += "v"
+            else:
+                prev_features = FT.get(x[i - 1])
+                if prev_features is None:
+                    continue
+                elif prev_features.get("syl") == 1:
+                    out += "v"
+                else:
+                    out += "C"
+
+    return out
 
 
 def extract_sonority(x: str) -> list[int]:
@@ -118,15 +140,14 @@ def extract_sonority(x: str) -> list[int]:
     Return:
         list[int]: Sequence of sonority values.
     """
-    sonority = get_sonority()
-    return [sonority[s] for s in x if s in sonority]
+    return [SON[s] for s in x if s in SON]
 
 
 def iso639_p3_to_p1(p3: str):
     try:
         lang = Language.from_part3(p3)
         return str(lang.part1)
-    except (LookupError, ValueError, AttributeError):
+    except (LookupError, LanguageNotFoundError, ValueError, AttributeError):
         return
 
 
@@ -141,14 +162,13 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
     syllables = x.explode("syll")
-    syll = syllables["syll"].to_list()
 
     valid_indices = []
     processed_structs = []
     processed_sonority = []
     ssp = []
 
-    for i, s in enumerate(syll):
+    for i, s in enumerate(syllables["syll"].to_list()):
         if not s:
             continue
 
@@ -158,16 +178,14 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
         # must have exactly 1 vocalic cluster
         if count_clusters(struct, "V") != 1:
             continue
-
-        sonority = get_sonority()
-        son = [sonority.get(s, 0) for s in s if s in sonority]
+        son = [SON[s] for s in s if s in SON]
         if not son:
             continue
 
         valid_indices.append(i)
         processed_structs.append(struct)
         processed_sonority.append(son)
-        ssp.append(has_one_peak(son))
+        ssp.append(has_one_peak(list(son)))
 
     if not valid_indices:
         return x[:0].clear()  # return empty DataFrame with same schema
@@ -181,17 +199,13 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-@benchmark
 def get_syllables(
-    words: pl.DataFrame | None = None,
-    min_syll: int = 20,
-    add_frequencies: bool = False,
+    words: pl.DataFrame, min_syll: int = 20, add_frequencies: bool = False
 ) -> pl.DataFrame:
     """Main script."""
-    if words is None:
-        words = get_words()
+
     if add_frequencies and "freq" not in words.columns:
-        warn("No frequencies found in dataset")
+        # warn("No frequencies found in dataset")
         add_frequencies = False
     syll = []
 
@@ -231,6 +245,6 @@ def get_syllables(
 
 if __name__ == "__main__":
     langs = pl.read_parquet(Path("out/languages.parquet"))
-    words = get_words(langs)
+    words = pl.read_parquet(Path("out/words.parquet"))
     sylls = get_syllables(words)
     sylls_freq = get_syllables(words, add_frequencies=True)

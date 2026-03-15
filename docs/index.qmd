@@ -14,10 +14,12 @@
 ```{python}
 from pathlib import Path
 import sys
+import iso639
 from whoosh.lang.lovins import O
 
 from great_tables import GT, md, html, from_column, style, loc
 from matplotlib import pyplot as plt
+import numpy as np
 import polars as pl
 
 from src import scraping, figures
@@ -30,13 +32,22 @@ OUT_PATH: Path = Path("out")
 ### Dataset acquisition
 
 ```{python}
-languages = pl.read_parquet(OUT_PATH / "languages.parquet")
+langs = pl.read_parquet(OUT_PATH / "languages.parquet")
 words = pl.read_parquet(OUT_PATH / "words.parquet")
-syllables = pl.read_parquet(OUT_PATH / "syllables.parquet")
+words = words.join(langs, on=(set(langs.columns).intersection(words.columns)))
+n_words = words.group_by("iso639p3code").len("n_words")
+sylls = pl.read_parquet(OUT_PATH / "syllables.parquet")
+sylls = sylls.join(langs, on=(set(langs.columns).intersection(sylls.columns))).join(
+    n_words, on="iso639p3code", how="left"
+)
+
 data = pl.read_parquet(OUT_PATH / "data.parquet")
+data = data.join(langs, on=(set(langs.columns).intersection(data.columns)))
+
+langs = langs.join(n_words, on="iso639p3code", how="left")
 
 n_eff_langs_words = len(words.unique("iso639p3code"))
-n_eff_langs_syllables = len(syllables.unique("iso639p3code"))
+n_eff_langs_syllables = len(sylls.unique("iso639p3code"))
 ```
 
 All `{python} len(languages)` languages included in the Glottolog database were targeted. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(languages)` languages with at least 100 pronunciations available in Wiktionary.
@@ -115,5 +126,77 @@ tbl = (
 )
 ```
 
+## Appendix
+
+```{python}
+# | label: fig-lang-distribution
+# | fig-caption: "Distribution of languages in the final dataset across language families."
+d = (
+    sylls.unique(["family_id", "lang"])
+    .group_by("family_id")
+    .len()
+    .sort("len", descending=True)
+)
+color_dict = figures.get_color_codes(sylls)
+
+fig, ax = plt.subplots(1, 1)
+for f, n in d.iter_rows(named=False):
+    p = ax.bar(f, n, 3 / 4, label=f, color=color_dict[f])
+    ax.bar_label(p, label_type="edge")
+ax.set_xticks([])
+ax.set_yticks([])
+fig.legend()
+fig.savefig(Path("img", "langs_family-distribution.png"))
+```
+
+```{python}
+# | label: fig-syllabic-repertoireç
+# | fig-caption: "Syllabic repertoire of each languages in the final dataset. Colours indicate language family."
+d = (
+    sylls.group_by(["lang", "family_id"])
+    .len()
+    .sort(["family_id", "len"], descending=True)
+)
+
+fig, ax = plt.subplots(1, 1)
+for lang, f, n in d.iter_rows(named=False):
+    p = ax.bar(lang, n, color=color_dict[f])
+l = ax.set_xticks(range(len(d)), d["lang"], rotation=90, ha="right", fontsize=7)
+```
+
+```{python}
+# | label: fig-struct-repertoire-n
+# | fig-cap: "Number of unique syllabic structures per language."
+d = (
+    sylls.unique(["lang", "struct", "family_id", "n_words"])
+    .group_by(["lang", "family_id", "n_words"])
+    .len()
+    .with_columns(prop=pl.col("len") / pl.col("n_words"))
+    .sort(["family_id", "prop"], descending=True)
+)
+
+
+fig, ax = plt.subplots(1, 1)
+for lang, f, _, _, p in d.iter_rows(named=False):
+    p = ax.bar(lang, p, color=color_dict[f])
+l = ax.set_xticks(range(len(d)), d["lang"], rotation=90, ha="right", fontsize=7)
+```
+
+```{python}
+d = (
+    sylls.group_by(["lang", "struct", "family_id"])
+    .len()
+    .with_columns((pl.col("len") / pl.sum("len")).alias("prop"))
+    .sort(["family_id", "lang", "prop"], descending=True)
+    .partition_by("lang", as_dict=True)
+)
+
+fig, ax = plt.subplots(1, 1)
+for lang, lang_d in d.items():
+    bottom = np.zeros(len(lang_d))
+    for l, s, f, _, p in lang_d.iter_rows(named=False):
+        ax.bar(l[0], lang_d["prop"], bottom=p, color=color_dict[f])
+        bottom += p
+``` 
 
 # References
