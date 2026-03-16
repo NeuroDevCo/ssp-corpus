@@ -1,5 +1,4 @@
 from pathlib import Path
-import pytest
 from unittest.mock import patch, MagicMock
 import polars as pl
 
