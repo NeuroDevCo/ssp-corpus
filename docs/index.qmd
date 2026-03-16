@@ -8,6 +8,22 @@
 * Prevalence of SSP in infant-directed speech corpora? (CHILDES lexical frequencies)
 * Grouping by language family?
 
+## Research questions
+
+* How often do languages follow the SSP?
+    - What proportion of the syllabic repertoire of a language that follow the SSP?
+        + Build a multilevel model that provides a global and a group-specific (i.e. language-specific) estimate of the porportion of SSP⁻following syllables in the syllabic repertoire of languages in the dataset.
+        + Report global estimate as an approximation to the prevalence of SSP across languages with several degrees of uncertainty.
+        + Report language-specific estimates for consultation in a table.
+    - Is this estimate biased by the underrepresentation of more SSP-following or more SSP-violating languages in the dataset? If so, languages with lower ratio of observations vs. number of speakers should follow the SSP less often than those with a higher ratio. 
+        + For language in the dataset, get an *underrepresentation coefficient* by calculating the ratio between the size of the syllabic repertoire (number of datapoints in the dataset) and the number of speakers of the language.
+        + Fit a model (same basic structure as before) that includes the *underrepresentation coefficient* predictor, and compare its regression coefficient against zero (perhaps specifying a ROPE).
+    - Is this estimate biased by the overrepresentation of syllabls of high frequency in the dataset (words inluding SSP-violating syllables might be less likely to be included in the dataset). If so, words with lower frequency should be less likely to follow the SSP compared to words with higher frequency.
+        + Create a *syllabic frequency* measure that accounts for how often a syllable appears across words in each language, and that adjusts this prevalence by the lexical frequency of the words it appears in.
+        + Fit a model (same basic stucture as before) that includes the *syllabic frequency* predictor, and compare its regression coefficient against zero (perhaps specifying a ROPE).
+
+
+
 
 ## Method
 
@@ -98,14 +114,14 @@ $$
 
 npron = words.group_by(["iso639p3code"]).agg(pl.len().alias("n_pron"))
 tbl = (
-    data.join(languages, on="iso639p3code", how="left")
+    data.join(langs, on="iso639p3code", how="left")
     .with_columns(
         pl.col("iso639p3code")
-        .replace_strict(figures.get_color_codes(languages), default="black")
+        .replace_strict(figures.get_color_codes(langs), default="black")
         .alias("color"),
     )
     .select(["lang", "iso639p3code", "family_id", "n", "prop", "color"])
-    .sort("prop")
+    .sort("iso639p3code")
 )
 
 (

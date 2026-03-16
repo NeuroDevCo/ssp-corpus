@@ -4,6 +4,7 @@ from pathlib import Path
 import arviz as az
 import arviz_plots as azp
 from cmdstanpy import CmdStanModel
+import numpy as np
 import polars as pl
 
 from src.languages import get_languages
@@ -23,9 +24,9 @@ class Conf:
 
 
 def get_data(
-    languages: pl.DataFrame | None = None,
-    words: pl.DataFrame | None = None,
-    syllables: pl.DataFrame | None = None,
+    languages: pl.DataFrame,
+    words: pl.DataFrame,
+    syllables: pl.DataFrame,
     by: str | list[str] = "iso639p3code",
     file: Path | str = Path("out/data.parquet"),
 ) -> pl.DataFrame:
@@ -44,14 +45,7 @@ def get_data(
     if isinstance(by, str):
         by = [by]
 
-    if languages is None:
-        languages = get_languages()
-    if words is None:
-        words = get_words(languages)
-    if syllables is None:
-        syllables = get_syllables(words)
-
-    languages = languages.select(by)
+    languages = languages.select([b for b in by if b in languages.columns])
     join_cols = set(languages.columns).intersection(set(syllables.columns))
 
     df = (
@@ -78,14 +72,15 @@ def get_stan_data(data: pl.DataFrame):
         "N": len(data),
         "n": data["n"].to_list(),
         "y": data["sum"].to_list(),
+        "J": len(data["iso639p3code"].unique()),
+        "j": list(range(1, len(data["iso639p3code"].unique()) + 1)),
         "prop": data["prop"].to_list(),
     }
 
-    if "family_id" in data.columns:
-        families = {k: i + 1 for i, k in enumerate(set(data["family_id"]))}
-        n_fam = len(set(data["family_id"]))
-        new_vars = {"J": n_fam, "g": [families[f] for f in data["family_id"]]}
-        stan_data.update(new_vars)
+    if "freq" in data.columns:
+        freq = np.array(data["freq"])
+        freq_std = (freq - freq.mean()) / freq.std()
+        stan_data.update({"f": freq_std.tolist()})
 
     return stan_data
 
@@ -97,9 +92,9 @@ def fit_model(
     samples = model.sample(data=data, **asdict(conf))
     idata = az.from_cmdstanpy(
         posterior=samples,
-        posterior_predictive="theta_rep",
+        # posterior_predictive="theta_rep",
         observed_data={"y": data["prop"]},
-        log_likelihood={"y": "log_lik"},
+        # log_likelihood={"y": "log_lik"},
     )
     return model, samples, idata
 
@@ -111,7 +106,7 @@ if __name__ == "__main__":
     sylls_freq = get_syllables(words, add_frequencies=True)
 
     # complete pooling model
-    data = get_data(sylls, langs)
+    data = get_data(langs, words, sylls)
     stan_data = get_stan_data(data)
     stan_file = Path("model/model.stan")
     model, samples, idata = fit_model(stan_data, stan_file)
@@ -120,7 +115,7 @@ if __name__ == "__main__":
     az.plot_ppc(idata, data_pairs={"y": "theta_rep"}, num_pp_samples=25)
 
     # now with partial pooling by family
-    data = get_data(sylls, langs, by=["iso639p3code", "family_id"])
+    data = get_data(langs, words, sylls, by=["iso639p3code", "family_id"])
     stan_data = get_stan_data(data)
     stan_file = Path("model/model-family.stan")
     model_family, samples_family, idata_family = fit_model(stan_data, stan_file)
@@ -134,7 +129,7 @@ if __name__ == "__main__":
     az.plot_compare(cmp_df)
 
     # complete pooling, only frequencies
-    data = get_data(sylls_freq, langs, by=["iso639p3code"])
+    data = get_data(langs, words, sylls_freq, by=["iso639p3code"])
     stan_data = get_stan_data(data)
     stan_file = Path("model/model.stan")
     model_freq, samples_freq, idata_freq = fit_model(stan_data, stan_file)
@@ -142,8 +137,17 @@ if __name__ == "__main__":
     azp.plot_rank_dist(idata_freq, var_names=["theta", "phi"])
     az.plot_ppc(idata_freq, data_pairs={"y": "theta_rep"}, num_pp_samples=25)
 
+    # complete pooling, only frequencies with slope for frequency
+    data = get_data(langs, words, sylls_freq, by=["iso639p3code", "freq"])
+    stan_data = get_stan_data(data)
+    stan_file = Path("model/model-freq.stan")
+    model_freq, samples_freq, idata_freq = fit_model(stan_data, stan_file)
+
+    azp.plot_rank_dist(idata_freq, var_names=["theta", "phi"])
+    az.plot_ppc(idata_freq, data_pairs={"y": "theta_rep"}, num_pp_samples=25)
+
     # partial pooling, only frequencies
-    data = get_data(sylls_freq, langs, by=["iso639p3code", "family_id"])
+    data = get_data(langs, words, sylls_freq, by=["iso639p3code", "family_id"])
     stan_data = get_stan_data(data)
     stan_file = Path("model/model.stan")
     model_freq_family, samples_freq_family, idata_freq_family = fit_model(

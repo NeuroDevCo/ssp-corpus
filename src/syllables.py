@@ -37,7 +37,7 @@ def count_clusters(x: str, symbol: str = "V") -> int:
     return list(x).count(symbol)
 
 
-def has_one_peak(x: list[int] | np.ndarray) -> bool:
+def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = False) -> bool:
     """
     Determine whether a sequence contains at most one strict local maximum.
 
@@ -69,19 +69,21 @@ def has_one_peak(x: list[int] | np.ndarray) -> bool:
         right_ok = (i == n - 1) or (x[i] > x[i + 1])
         if left_ok and right_ok:
             count += 1
+            if count != 1 and not allow_flat:
+                return False
             if count > 1:
                 return False
     return True
 
 
-def classify_segments(x: str, on_missing: str = "skip") -> str:
+def classify_segments(x: str, on_missing: str = "skip") -> str | None:
     """
     Classify segments in a word form into consonants (C), vowels (V), and semi-vowels (v).
 
     Note:
         This function uses Panphon's segment features to classify segments into consonants and vowels. It loops through each segment in the sequence, and makes the following decissions:
 
-
+        0) If any of the segments is not found in the Panphon feature table, the syllable is skipped.
         1) If the segment is syllabic (can act as syllable nucleus), it is classified as a vowel. If the segment is consonantal, it is classified as a consonant. The iteration is finished.
         2) If the segment is not syllabic nor consonantal, it is considered a glide or semi-vowel. Following Ramus et al. (1999), the following decissions are made in order:
             2.1) If the segment is the first of the sequence, it is classified as a glide, therefore consonant.
@@ -95,7 +97,7 @@ def classify_segments(x: str, on_missing: str = "skip") -> str:
         on_missing (str, optional): What should happen if a segment is not found in the Panphon features table? If "error", an error is raised. If "warning", a warning is displayed and the segment is skipped. If "skip" (default), the segment is simply skipped.
 
     Return:
-        str: Sequence of classified segments.
+        str | None: Sequence of classified segments, None if any segment in the string is not found in the Panphon feature table.
     """
     if on_missing not in ["error", "warning", "skip"]:
         raise ValueError("`on_missing` must be one of 'error', 'warning', or 'skip'")
@@ -109,7 +111,7 @@ def classify_segments(x: str, on_missing: str = "skip") -> str:
                 raise KeyError(msg)
             if on_missing == "warn":
                 warn(msg)
-            continue
+            return
         elif features.get("syl") == 1:
             out += "V"
         elif features.get("cons") == 1:
@@ -151,7 +153,7 @@ def iso639_p3_to_p1(p3: str):
         return
 
 
-def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
+def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
     """
     Get syllables from a words database.
 
@@ -174,6 +176,8 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
 
         # TODO: figure out better handling of vocalic clusters
         struct = classify_segments(s)
+        if struct is None:
+            continue
 
         # must have exactly 1 vocalic cluster
         if count_clusters(struct, "V") != 1:
@@ -187,8 +191,17 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
         processed_sonority.append(son)
         ssp.append(has_one_peak(list(son)))
 
-    if not valid_indices:
-        return x[:0].clear()  # return empty DataFrame with same schema
+    if not valid_indices:  # return empty df
+        return
+    #     df = x[:0].clear()
+    #     cols = [
+    #         ("struct", pl.String),
+    #         ("sonority", pl.List(pl.Int64)),
+    #         ("is_ssp", pl.Boolean),
+    #     ]
+    #     for c, t in cols:
+    #         df.insert_column(-1, pl.Series(c, values=[], dtype=t))
+    #     return df
 
     df = syllables[valid_indices]
 
@@ -200,7 +213,7 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame:
 
 
 def get_syllables(
-    words: pl.DataFrame, min_syll: int = 20, add_frequencies: bool = False
+    words: pl.DataFrame, min_syll: int = 0, add_frequencies: bool = False
 ) -> pl.DataFrame:
     """Main script."""
 
@@ -218,7 +231,7 @@ def get_syllables(
     for lang_words in track(part_words, msg, len(part_words)):
         try:
             df = get_lang_syllables(lang_words)
-            if len(df) < min_syll:
+            if df is None or len(df) < min_syll:
                 continue
             syll.append(df)
 
