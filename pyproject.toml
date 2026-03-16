@@ -1,7 +1,7 @@
 [project]
 name = "ssp-corpus"
 version = "0.1.0"
-description = "Add your description here"
+description = "A phonological corpus analysis on the prevalence of the Sonority Sequencing Principle across languages."
 readme = "README.md"
 requires-python = ">=3.12.7"
 dependencies = [
@@ -30,6 +30,4 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
-    "ruff>=0.15.6",
-]
+dev = ["ruff>=0.15.6"]

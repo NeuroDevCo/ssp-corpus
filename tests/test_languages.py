@@ -1,6 +1,5 @@
 import polars as pl
 import pytest
-from unittest.mock import patch, MagicMock
 import pandas as pd
 
 from src.languages import get_glottolog, get_phoible, get_languages

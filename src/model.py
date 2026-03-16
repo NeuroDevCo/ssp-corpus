@@ -23,8 +23,9 @@ class Conf:
 
 
 def get_data(
-    syllables: pl.DataFrame | None = None,
     languages: pl.DataFrame | None = None,
+    words: pl.DataFrame | None = None,
+    syllables: pl.DataFrame | None = None,
     by: str | list[str] = "iso639p3code",
     file: Path | str = Path("out/data.parquet"),
 ) -> pl.DataFrame:
@@ -45,8 +46,10 @@ def get_data(
 
     if languages is None:
         languages = get_languages()
+    if words is None:
+        words = get_words(languages)
     if syllables is None:
-        syllables = get_syllables()
+        syllables = get_syllables(words)
 
     languages = languages.select(by)
     join_cols = set(languages.columns).intersection(set(syllables.columns))

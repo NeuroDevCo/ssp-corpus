@@ -4,7 +4,7 @@ import cmdstanpy
 
 from pathlib import Path
 
-import arviz_stats as az_stats
+import arviz_stats as azs
 from matplotlib import pyplot as plt
 from matplotlib import colors as cm
 from matplotlib.colors import Colormap
@@ -13,7 +13,9 @@ from mpl_toolkits.basemap import Basemap
 import numpy as np
 import polars as pl
 
-from src import scraping
+from src import languages, scraping
+
+LANGS: pl.DataFrame = languages.get_languages()
 
 
 def get_color_codes(
@@ -64,7 +66,7 @@ def plot_proportions(
     d2 = d.slice(0, len(data) // 2)
     d1 = d.slice(len(d2), len(d) - len(d2))
 
-    colors = get_color_codes()
+    colors = get_color_codes(LANGS)
     fig, axes = plt.subplots(ncols=2, figsize=(13, 10))
     for ax, d in zip(axes, (d1, d2)):
         for di in d.to_dicts():
@@ -90,7 +92,7 @@ def plot_estimates(
     file: Path | str = Path("img", "estimates.png"),
 ):
     p = posterior.sort("mean", descending=True)
-    colors = get_color_codes()
+    colors = get_color_codes(LANGS)
 
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.errorbar(
@@ -151,7 +153,7 @@ def plot_map(data: pl.DataFrame):
     m.drawmapboundary(fill_color="white", linewidth=0)
     m.drawcoastlines(color="#cccccc")
     m.fillcontinents(color="#cccccc")
-    colors = get_color_codes(alpha=1 / 2)
+    colors = get_color_codes(LANGS, alpha=1 / 2)
 
     # plot populations
     for fam, col in colors.items():
@@ -259,14 +261,6 @@ def plot_map(data: pl.DataFrame):
     fig.savefig(Path("img", "map.png"), dpi=1e3, bbox_inches="tight")
 
 
-def plot_model_rank(model: cmdstanpy.CmdStanMCMC):
-    fig, axes = plt.subplots(1, 2)
-
-    az_stats.plot_ecdf_pit(idata, var_names="theta")
-
-    fig.suptitle("Rank (All Chains)")
-
-
 def plot_model_hist(x: cmdstanpy.CmdStanMCMC, data: dict):
     params = ["theta"]
     draws = (
@@ -285,7 +279,7 @@ def plot_model_hist(x: cmdstanpy.CmdStanMCMC, data: dict):
         )
         lookup = lookup.values()
     mean = draws["value"].mean()
-    lower, upper = az_stats.hdi(draws["value"].to_numpy(), prob=0.89)
+    lower, upper = azs.hdi(draws["value"].to_numpy(), prob=0.89)
 
     fig, axes = plt.subplots(1, 1)
     for group in lookup:
