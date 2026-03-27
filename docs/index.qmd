@@ -80,6 +80,17 @@ We used a multilevel, Bayesian logistic regression model to estimate the proport
 $$
 \begin{aligned}
 \textbf{Likelihood:} \\
+y_{[i]} &\sim \text{Binomial}(n_{[i]}, \theta_{[i]}) \\
+\theta_{[i]} &= \text{logit}^{-1}(\alpha_{[i]}) \\
+\textbf{Prior:} \\
+\alpha_{[i]} &\sim \mathcal{N}(, 1)
+\end{aligned}
+$$ {#eq-model}
+
+
+$$
+\begin{aligned}
+\textbf{Likelihood:} \\
 y_{[j]i} &\sim \text{Binomial}(n_i, \frac{\theta_{[j]i}}{1 - \theta_{[j]i}}) \\
 \theta_{j[i]} &\sim \mathcal{N}(\mu_j, \sigma_j) \\
 \text{where:} \\

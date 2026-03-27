@@ -1,3 +1,4 @@
+from jinja2.nodes import With
 from pathlib import Path
 from warnings import warn
 
@@ -163,69 +164,38 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
     Returns:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
-    syllables = x.explode("syll")
 
-    valid_indices = []
-    processed_structs = []
-    processed_sonority = []
-    ssp = []
-
-    for i, s in enumerate(syllables["syll"].to_list()):
-        if not s:
-            continue
-
-        # TODO: figure out better handling of vocalic clusters
-        struct = classify_segments(s)
-        if struct is None:
-            continue
-
-        # must have exactly 1 vocalic cluster
-        if count_clusters(struct, "V") != 1:
-            continue
-        son = [SON[s] for s in s if s in SON]
-        if not son:
-            continue
-
-        valid_indices.append(i)
-        processed_structs.append(struct)
-        processed_sonority.append(son)
-        ssp.append(has_one_peak(list(son)))
-
-    if not valid_indices:  # return empty df
-        return
-    #     df = x[:0].clear()
-    #     cols = [
-    #         ("struct", pl.String),
-    #         ("sonority", pl.List(pl.Int64)),
-    #         ("is_ssp", pl.Boolean),
-    #     ]
-    #     for c, t in cols:
-    #         df.insert_column(-1, pl.Series(c, values=[], dtype=t))
-    #     return df
-
-    df = syllables[valid_indices]
-
-    return df.with_columns(
-        pl.Series("struct", processed_structs),
-        pl.Series("sonority", processed_sonority),
-        pl.Series("is_ssp", ssp),
+    df = (
+        x.explode("syll")
+        .with_columns(
+            struct=pl.col("syll").map_elements(
+                classify_segments, return_dtype=pl.String
+            )
+        )
+        .filter(pl.col("struct").str.count_matches("V") == 1)
+        .group_by(["iso639p3code", "syll", "struct"])
+        .agg(pl.col("freq").sum())
+        .with_columns(
+            n_phon=pl.col("syll").str.len_chars(),
+            sonority=pl.col("syll")
+            .str.extract_all(".")
+            .list.eval(pl.element().replace(SON)),
+        )
+        .with_columns(
+            is_ssp=pl.col("sonority").map_elements(
+                has_one_peak, return_dtype=pl.Boolean
+            )
+        )
     )
 
+    return df
 
-def get_syllables(
-    words: pl.DataFrame, min_syll: int = 0, add_frequencies: bool = False
-) -> pl.DataFrame:
+
+def get_syllables(words: pl.DataFrame, min_syll: int = 20) -> pl.DataFrame:
     """Main script."""
 
-    if add_frequencies and "freq" not in words.columns:
-        # warn("No frequencies found in dataset")
-        add_frequencies = False
     syll = []
 
-    if add_frequencies:
-        words = words.drop_nulls("freq")
-
-    # TODO: iterate over split polars dataframes instead of filenames
     part_words = words.partition_by("iso639p3code")
     msg = f"SYLLABLES: {len(part_words):,} languages"
     for lang_words in track(part_words, msg, len(part_words)):
@@ -242,13 +212,7 @@ def get_syllables(
             print(e)
 
     syll = pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
-    cols_keep = ["iso639p3code", "syll", "struct", "sonority", "is_ssp"]
-
-    if add_frequencies:
-        syll = syll.group_by(cols_keep).agg(pl.col("freq").sum())
-        cols_keep += ["freq"]
-    else:
-        syll = syll.unique(["iso639p3code", "syll"])
+    cols_keep = ["iso639p3code", "syll", "struct", "sonority", "freq", "is_ssp"]
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
     syll.write_parquet(Path("out/syllables.parquet"))
@@ -260,4 +224,3 @@ if __name__ == "__main__":
     langs = pl.read_parquet(Path("out/languages.parquet"))
     words = pl.read_parquet(Path("out/words.parquet"))
     sylls = get_syllables(words)
-    sylls_freq = get_syllables(words, add_frequencies=True)

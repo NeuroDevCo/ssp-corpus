@@ -173,3 +173,11 @@ cython_debug/
 #.idea/
 
 /.quarto/
+
+
+data/*.zip
+docs/*.png
+docs/*.pdf
+*.tsv
+*.csv
+*.png

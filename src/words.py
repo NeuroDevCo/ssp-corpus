@@ -21,6 +21,22 @@ def iso639_p3_to_p1(p3: str):
         return
 
 
+def iso639_p3_to_name(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.name)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
+def iso639_name_to_p3(name: str):
+    try:
+        lang = Language.from_name(name)
+        return str(lang.part3)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
 @benchmark
 def get_frequencies(
     x: pl.DataFrame,
