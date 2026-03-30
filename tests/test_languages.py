@@ -4,8 +4,6 @@ import pandas as pd
 
 from src.languages import get_glottolog, get_phoible, get_languages
 
-# --- Fixtures ---
-
 
 @pytest.fixture
 def mock_glottolog_trees_data():
@@ -55,9 +53,6 @@ def mock_phoible_data():
             "vowels": [16, 10, 10],
         }
     )
-
-
-# --- Test Classes ---
 
 
 class TestGetGlottolog:

@@ -181,3 +181,4 @@ docs/*.pdf
 *.tsv
 *.csv
 *.png
+**/*.quarto_ipynb

@@ -191,7 +191,7 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
     return df
 
 
-def get_syllables(words: pl.DataFrame, min_syll: int = 20) -> pl.DataFrame:
+def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
     """Main script."""
 
     syll = []

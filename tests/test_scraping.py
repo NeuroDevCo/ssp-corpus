@@ -6,7 +6,6 @@ import polars as pl
 # Adjust the import path 'scraping' if your file is named differently.
 from src.scraping import (
     EmptyLanguage,
-    _scrape_lang_wrapper,
     scrape_language,
     get_scraped_languages,
     scrape_all_languages,
@@ -68,25 +67,6 @@ class TestGetScrapedLanguages:
         result = get_scraped_languages(path=tmp_path, keep_empty=True)
 
         assert "spa" in result
-
-
-class TestScrapeLangWrapper:
-    """Tests for the internal _scrape_lang_wrapper function."""
-
-    def test_skips_if_file_exists(self, tmp_path):
-        """Test that function returns early if file already exists."""
-        existing_file = tmp_path / "eng.csv"
-        existing_file.write_text("existing data")
-
-        # Mock scrape to ensure it is NOT called
-        with patch("wikipron.scrape") as mock_scrape:
-            _scrape_lang_wrapper("eng", MagicMock(), path=tmp_path)
-
-            mock_scrape.assert_not_called()
-
-        # Verify file content is unchanged (mode is 'a+', but logic returns early)
-        content = existing_file.read_text()
-        assert content == "existing data"
 
 
 class TestScrapeLanguage:

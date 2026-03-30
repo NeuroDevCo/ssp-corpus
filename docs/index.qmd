@@ -1,26 +1,103 @@
 ## Introduction
 
-* Sonority is very important
-* The SSP.
-* The SSP is claimed to be a linguistic universal, but its statistical prevalence across and within languages is unclear.
-* Prevalence of SSP in langages syllabic repertoire?
-* Prevalence of SSP in adult-directed speech corpora? (SUBTLEX lexical frequencies)
-* Prevalence of SSP in infant-directed speech corpora? (CHILDES lexical frequencies)
-* Grouping by language family?
+### Syllables are a critical lingusitic unit during early language acquisition
+
+Speech is made of hierarchically organised, discrete linguistic units (e.g., phonemes, syllables, words, phrases). Syllables are a privileged linguistic unit in speech processing, particularly during early language acquisition: newborns preferentially chunk the speech signal into syllable-sized units [@bijeljac-babic1993how; ]. This is remarkable, given they have accumulated a relatively limited linguistic experience. The mechanisms underlying syllable identification are still unclear.
+
+### The Sonority Sequencing Principle (SSP) may provide cues to syllable identification
+
+There is some evidence that, at birth, humans are sensitivity to certain constraints to syllabic structure. One of them is the Sonority Sequencing Principle (SSP). The SSP constrains the order of the segments inside a syllable based on sonority, a phonological feature that describes the perceptual loudness of a segment relative to neighbouring segments. The SSP states that each syllable displays a unique peak of sonority in the nucleus, and that sonority rises unidirectionally from the syllable margins toward the nucleus [@parker2008sounda].
+
+Although the specific acoustic correlates of sonority are still under debate [@albert2022modeling; @parker2008sounda], sonority scales have been developed and agreed one by most researchers so that different segment classes are assigned some scalar, ordered sonority score, following available literature of cross-linguistic phonology [see @jany2007universal for an acoustic grouding of this sonority hierarchy, based on intensity]. By assigning numeric sonority values to specific segments, syllables can be classified as following or violating the SSP. @clements1990role proposes the following sonority hierarchy:
+
+> vowels > glides > liquids > nasals > obstruents
+
+### Newborns are sensitive to (violations of) the SSP
+
+@gomez2014language showed in newborns that hearing SSP-following syllables (e.g., *bran*) elicits different brain haemodynamic responses compared to SSP-violating syllables (e.g., *lbif*), suggesting that newborns, how have not yet acquired extensive experience with the phonological contraints of their native language, are already sensitive to violations of the SSP. 
+
+Such early bias toward certain syllabic structures would provide humans with an available mechanism to detect syllables in the continuous speech stream at the earliest stages of language acquisition.
+
+### Is the SSP a linguistic universal?
+
+The SSP has been long claimed to be a linguistic universal, on the grounds of SSP-following syllables being preferred over SSP-violating syllables across most languages. @parker2017sounding collects evidence from 275 experimental works on a typologically diverse list of 75 distinct languages, and reports that 63% of the studies suggest that sonority plays a relevant role for accounting for the results, and 22% provide inconclusive evidence, and 15% provide negative evidence for such a relevant role of sonority.
+
+The universality of the SSP would place this principle as one of the few cues for speech segmentation present from birth to *all* humans, before language-specific constraints to sound sequences (e.g., phonotactics) are available.
+
+The universal status of the SSP is however a matter of debate, as violations of the SSP are common across languages. For instance, the /st-, -ts/ consonant clusters violate the SSP when at syllabic onset or at coda (e.g., *street*, *ticks*), respectively. This is the case across many languages [@kawasaki1997alternatives]. Some languages, like Russian, are known for allowing fairly complex consonant clusters at syllabic onset that violate the SSP (e.g., взгляд (*vzglyad* [glance]) [@halle1971sound; @ito1982syllable].
+
+More recent accounts of linguistic universals [e.g., Optimality Theory, @prince2004optimalitya] propose a softer understanding of the term "universal", such that linguistic universals represent overall preferences toward certain linguistic structures across languages, instead of hard ON/OFF constraints. Under this account, the role of the SSP as a universally available cue for syllabification becomes a statistical question: how often do syllables in different languages abide by the SSP?
+
+In this line, @frisch2015preliminary estimates the relative frequency of SSP-following consonant clusters across languages 93 langugaes at around 70%, compared to SSP-violating clusters.
+
+The aim of the present paper is to provide empirical estimates of the prevalence of the SSP in a fairly representative sample of languages.
 
 ## Research questions
 
-* How often do languages follow the SSP?
-    - What proportion of the syllabic repertoire of a language that follow the SSP?
-        + Build a multilevel model that provides a global and a group-specific (i.e. language-specific) estimate of the porportion of SSP⁻following syllables in the syllabic repertoire of languages in the dataset.
-        + Report global estimate as an approximation to the prevalence of SSP across languages with several degrees of uncertainty.
-        + Report language-specific estimates for consultation in a table.
-    - Is this estimate biased by the underrepresentation of more SSP-following or more SSP-violating languages in the dataset? If so, languages with lower ratio of observations vs. number of speakers should follow the SSP less often than those with a higher ratio. 
-        + For language in the dataset, get an *underrepresentation coefficient* by calculating the ratio between the size of the syllabic repertoire (number of datapoints in the dataset) and the number of speakers of the language.
-        + Fit a model (same basic structure as before) that includes the *underrepresentation coefficient* predictor, and compare its regression coefficient against zero (perhaps specifying a ROPE).
-    - Is this estimate biased by the overrepresentation of syllabls of high frequency in the dataset (words inluding SSP-violating syllables might be less likely to be included in the dataset). If so, words with lower frequency should be less likely to follow the SSP compared to words with higher frequency.
-        + Create a *syllabic frequency* measure that accounts for how often a syllable appears across words in each language, and that adjusts this prevalence by the lexical frequency of the words it appears in.
-        + Fit a model (same basic stucture as before) that includes the *syllabic frequency* predictor, and compare its regression coefficient against zero (perhaps specifying a ROPE).
+1) What proportion of the syllabic repertoire of a language follows the SSP?
+
+What is the empirical proportion of SSP-following and SSP-violating syllables in each language?
+
+2) Are SSP-following syllables more frequent in the lexicon of each language, compared to SSP-violating syllables?
+    2.1) In adult-directed lexical frequencies?
+    2.2) In infant-directed lexical frequencies?
+    2.3) In infant lexicon?
+
+Estimating SSP prevalence on the phonemic repertoire assumes that all syllables appear with identical frequency in the language they belong to. This is not necessarily the case. For instance, /ka/ probably appears more often than /gla/. If SSP-following syllables appear in speech more often than SSP-violating syllables, the SSP prevalence estimate likely underestimates the true value of the parameter (or overestimates, in the opposite situation).
+
+3) Does under/over-representation of some languages bias the estimation of SSP prevalence?
+
+We do not have access to the full syllabic repertoire of each language. Available syllables from languages are the result of convenience samples (e.g., in Wiktionary, word entries are created by volunteers). The number of entries from each language, the amount of detail with which they are entered, and the type of words that are entered, varies systematically across languages. This might bias the estimates. For instance, if SSP-violating syllables are less frequent than SSP-following syllables in the lexicon of a language, and less frequent words are less likely to enter Wiktionary by volunteers, then the observed prevalence o fSSP for that language likely overestimates the prevalence of SSP-following languages.
+
+## Method
+
+### Data
+
+1) Scrape word entries with phonological transcriptions from [Wiktionary](https://www.wiktionary.org/)
+    - Diversity: pronunciations from over 900 languages, 165 of which have at least 100 phonological transcriptions available.
+    - Extensiveness: Contains a total of  1.7 million 
+    - Open-source, free.
+    - Available tools for scraping: wikipron (Python) [@lee2020massively]
+    - Lexicon-like: preserves syllable counts across words from the same language.
+2) Syllabify pronunciations:
+    2.1) Use explicit syllable boundary markers if available.
+    2.2) Use implicity syllable boundaries if available (e.g., primary and secondary stress markers)
+    2.3) In the absence of syllabic markers, assume the word is monosyllabic.
+    2.4) Filter our resulting syllables with more than one vocalic cluster (assumed to be bisyllabic)
+3) Evaluate if syllable follows the SSP:
+    3.1) Transform syllables into sonority scores (`wikipron`)
+    3.2) Evaluate if syllable has exactly one peak of sonority:
+        - `True`: SSP-following
+        - `False`: SSP-violating
+
+### Data analysis
+
+#### 1) What proportion of the syllabic repertoire of a language follows the SSP?
+
+1) Remove duplicated syllables from each language dataset.
+2) Aggregate across syllables from each language dataset to estimate the proportion of syllables that follow/violate the SSP.
+3) Build a multilevel model that provides a global and a group-specific (i.e. language-specific) estimate of the porportion of SSP-following syllables in the syllabic repertoire of each language in the dataset.
+    3.1) Report **global estimate** as an approximation to the prevalence of SSP across languages with several degrees of uncertainty.
+    3.2) Report **language-specific estimates** for consultation in a table.
+
+#### 2) Are SSP-following syllables more frequent in the lexicon of each language, compared to SSP-violating syllables?
+
+1) Create a *syllabic frequency* measure that accounts for how often a syllable appears across words in each language, and that adjusts this prevalence by the lexical frequency of the words it appears in [see @frisch2015preliminary for a similar approach].
+    1.1) For each language dataset, get the lexical frequency of each word in a lexical frequency database for that language.
+    1.2) *Syllabic frequency*: Add up the lexical frequency of the words each syllable appears in.
+2) Fit a model (same basic stucture as before) that includes the *syllabic frequency* predictor, and compare its regression coefficient against zero (perhaps specifying a ROPE).
+
+### Does under/over-representation of some languages bias the estimation of SSP prevalence?
+
+$$
+\begin{align}
+\text{SSP}_i &\sim \text{Binomial}(n_i, \theta_i) \\
+\theta_i  &= \text{InvLogit}(\beta_0 + \mu_{0i}) \\
+\beta_0 &\sim \mathcal{N}(0, 1) \\
+\mu_{0i} &\sim \mathcal{N}(0, \sigma_{i0}) \\
+\sigma_{i0} &\sim \text{Exponential}(4)
+\end{align}
+$$
 
 
 
