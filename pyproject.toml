@@ -35,5 +35,17 @@ dependencies = [
 [dependency-groups]
 dev = ["ruff>=0.15.6"]
 
+[project.scripts]
+test = "scripts.model:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
+
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "src"
