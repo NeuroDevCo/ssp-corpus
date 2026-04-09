@@ -1,27 +1,25 @@
 data {
   int<lower=1> N; // number of observations
-  int<lower=1> J; // number of groups
-  array[N] int<lower=0> n; // number of trials per observation
-  array[N] int<lower=0> y; // number of successes per observation
-  array[N] int<lower=0, upper=J> j; // group index for each observation
+  int<lower=1> J; // number of groups (languages)
+  
+  array[N] int<lower=0, upper=1> y; // binary response variable (0 or 1)
+  array[N] real x; // predictor variable (standardized)
+  array[N] int<lower=1, upper=J> j; // group index for each observation
 }
 parameters {
-  real alpha; // population-level intercept
-  vector[J] alpha_j; // group-level deviations
-  real<lower=0> sigma; // standard deviation of group-level deviations
+  vector[2] beta; // global intercept and slope of freq
+  vector[J] z_mu; // group-level adjustments, unconstrained, normal(0,1)
+  real<lower=0> sigma_mu; // SD of group-level adjustments
+}
+transformed parameters {
+  vector[J] mu = z_mu * sigma_mu;
 }
 model {
-  alpha ~ normal(0, 1.5);
-  sigma ~ exponential(1);
-  alpha_j ~ normal(0, sigma);
-  y ~ binomial(n, inv_logit(alpha + alpha_j[j]));
-}
-generated quantities {
-  real<lower=0, upper=1> theta; // probability for a "typical" group
-  vector<lower=0, upper=1>[J] theta_j; // shrunken estimates for each group
+  // prior
+  beta ~ normal(0, 0.5);
+  sigma_mu ~ exponential(1);
+  z_mu ~ normal(0, 1);
   
-  theta = inv_logit(alpha);
-  for (j_idx in 1 : J) {
-    theta_j[j_idx] = inv_logit(alpha + alpha_j[j_idx]);
-  }
+  // likelihood
+  y ~ bernoulli_logit(beta[1] + mu[j] + (beta[2] * to_vector(x)));
 }

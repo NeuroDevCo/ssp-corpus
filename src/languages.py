@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from iso639 import Language
 from lingtypology import datasets
 import polars as pl
 from rich.console import Console
@@ -94,6 +95,30 @@ def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.Dat
         df.write_parquet(Path(file))
 
     return df
+
+
+def iso639_p3_to_p1(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.part1)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
+def iso639_p3_to_name(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.name)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
+def iso639_name_to_p3(name: str):
+    try:
+        lang = Language.from_name(name)
+        return str(lang.part3)
+    except (LookupError, ValueError, AttributeError):
+        return
 
 
 if __name__ == "__main__":

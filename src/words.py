@@ -1,40 +1,15 @@
 from pathlib import Path
 from tempfile import tempdir
 
-from iso639 import Language
 import polars as pl
 from rich.progress import track
 from wordfreq import zipf_frequency
 
-from src.languages import get_languages
+from src.languages import get_languages, iso639_p3_to_p1
 from src.utils import add_lang_col, benchmark
 
 IN_PATH: Path = Path("data/raw")
 OUT_PATH: Path = Path("data/processed/words")
-
-
-def iso639_p3_to_p1(p3: str):
-    try:
-        lang = Language.from_part3(p3)
-        return str(lang.part1)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
-def iso639_p3_to_name(p3: str):
-    try:
-        lang = Language.from_part3(p3)
-        return str(lang.name)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
-def iso639_name_to_p3(name: str):
-    try:
-        lang = Language.from_name(name)
-        return str(lang.part3)
-    except (LookupError, ValueError, AttributeError):
-        return
 
 
 @benchmark
@@ -48,6 +23,9 @@ def get_frequencies(
     file = Path(file)
     if file.exists():
         return pl.read_parquet(file)
+
+    if len(x) == 0:
+        return
 
     langs_lookup = {p3: iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())}
 
