@@ -1,7 +1,5 @@
 """Main script."""
 
-from jinja2.nodes import With
-
 from pathlib import Path
 
 import arviz as az
