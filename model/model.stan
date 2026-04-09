@@ -1,5 +1,4 @@
 data {
-  int<lower=0, upper=1> prior;
   int<lower=1> N; // number of observations
   int<lower=1> J; // number of groups (languages)
   
@@ -9,27 +8,18 @@ data {
 }
 parameters {
   vector[2] beta; // global intercept and slope of freq
-  vector[J] mu; // group-level adjustments
+  vector[J] z_mu; // group-level adjustments, unconstrained, normal(0,1)
   real<lower=0> sigma_mu; // SD of group-level adjustments
+}
+transformed parameters {
+  vector[J] mu = z_mu * sigma_mu;
 }
 model {
   // prior
   beta ~ normal(0, 0.5);
-  sigma_mu ~ exponential(10);
-  mu ~ normal(0, sigma_mu); // hierarchical prior for group adjustments
+  sigma_mu ~ exponential(1);
+  z_mu ~ normal(0, 1);
   
   // likelihood
-  if (prior == 0) {
-    y ~ bernoulli_logit(beta[1] + mu[j] + (beta[2] * to_vector(x)));
-  }
-}
-generated quantities {
-  // Simulate replicated data (y_rep) based on PRIORS
-  if (prior == 1) {
-    array[N] int y_rep;
-    
-    for (n in 1 : N) {
-      y_rep[n] = bernoulli_logit_rng(beta[1] + mu[j[n]] + beta[2] * x[n]);
-    }
-  }
+  y ~ bernoulli_logit(beta[1] + mu[j] + (beta[2] * to_vector(x)));
 }

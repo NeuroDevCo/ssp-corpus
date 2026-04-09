@@ -24,7 +24,7 @@ class Conf:
     output_dir: Path = Path("model", "samples")
 
 
-def get_stan_data(x: pl.DataFrame, fixed_params: bool = False) -> dict:
+def get_stan_data(x: pl.DataFrame) -> dict:
     """Transform syllables dataset into Stan data.
 
     Args:
@@ -39,7 +39,6 @@ def get_stan_data(x: pl.DataFrame, fixed_params: bool = False) -> dict:
         "y": x["is_ssp"].to_list(),
         "j": j.to_list(),
         "x": freqs.to_list(),
-        "prior": int(fixed_params),
     }
 
 
@@ -47,7 +46,6 @@ def fit_model(
     stan_data: dict,
     stan_file: Path | str = Path("model/model.stan"),
     overwrite: bool = False,
-    fixed_params: bool = False,
     conf: Conf = Conf(),
     **kwargs,
 ):
@@ -78,8 +76,8 @@ if __name__ == "__main__":
     sylls = get_syllables(words).drop_nulls(["freq"])
 
     # prior
-    conf: Conf = Conf(output_dir=Path("model", "samples-prior"))
-    stan_data = get_stan_data(sylls, fixed_params=True)
+    conf: Conf = Conf(output_dir=Path("model", "samples"))
+    stan_data = get_stan_data(sylls)
     stan_file = Path("model/model.stan")
     model, samples, idata = fit_model(stan_data, stan_file, conf=conf, overwrite=True)
 
@@ -88,11 +86,34 @@ if __name__ == "__main__":
     post = samples.summary()
     post.index.name = "param"
     post.reset_index(inplace=True)
+    post = pl.from_pandas(post)
 
-    samples = from_csv(Path("model", "samples"))
-
+    target_cols = {"50%": "median", "5%": "lower", "95%": "upper"}
+    old_names = list(target_cols.keys())
+    new_names = list(target_cols.values())
+    intercept = (
+        post.filter(pl.col("param") == "beta[1]")
+        .select(["param"] + old_names)
+        .rename(target_cols)
+        .with_columns(
+            median=pl.col("median").exp() / (1 + pl.col("median").exp()),
+            lower=pl.col("lower").exp() / (1 + pl.col("lower").exp()),
+            upper=pl.col("upper").exp() / (1 + pl.col("upper").exp()),
+        )
+        .to_dicts()[0]
+    )
     a = (
-        pl.from_pandas(post)
-        .filter(pl.col("param").str.starts_with("theta"))
-        .sort("Mean", descending=True)
+        post.filter(pl.col("param").str.starts_with("mu"))
+        .select(["param"] + list(target_cols.keys()))
+        .rename(target_cols)
+        .with_columns(
+            median_s=pl.col("median") + intercept["median"],
+            lower_s=pl.col("median") + intercept["lower"],
+            upper_s=pl.col("median") + intercept["upper"],
+        )
+        .with_columns(
+            median_p=pl.col("median_s").exp() / (1 + pl.col("median_s").exp()),
+            lower_p=pl.col("lower_s").exp() / (1 + pl.col("lower_s").exp()),
+            upper_p=pl.col("upper_s").exp() / (1 + pl.col("upper_s").exp()),
+        )
     )
