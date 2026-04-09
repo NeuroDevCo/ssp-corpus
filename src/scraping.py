@@ -12,7 +12,7 @@ from pathlib import Path
 from rich.console import Console
 from wikipron import Config, scrape
 
-from src.languages import get_languages, iso639_p3_to_name
+from src.languages import get_languages
 
 logger = Logger("pyppeteer", ERROR)
 

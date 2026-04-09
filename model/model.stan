@@ -12,14 +12,16 @@ parameters {
   real<lower=0> sigma_mu; // SD of group-level adjustments
 }
 transformed parameters {
+  real theta = inv_logit(beta[1]);
   vector[J] mu = z_mu * sigma_mu;
+  vector[J] theta_j = inv_logit(beta[1] + mu);
 }
 model {
   // prior
-  beta ~ normal(0, 0.5);
-  sigma_mu ~ exponential(1);
-  z_mu ~ normal(0, 1);
+  beta ~ normal(0, 10);
+  sigma_mu ~ exponential(5);
+  z_mu ~ normal(0, 0.5);
   
   // likelihood
-  y ~ bernoulli_logit(beta[1] + mu[j] + (beta[2] * to_vector(x)));
+  y ~ bernoulli_logit((beta[1] + mu[j]) + (beta[2] * to_vector(x)));
 }

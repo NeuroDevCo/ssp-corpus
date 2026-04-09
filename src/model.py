@@ -2,26 +2,21 @@ from dataclasses import dataclass, asdict
 from multiprocessing import cpu_count
 from pathlib import Path
 
-import arviz as az
-import arviz_plots as azp
-from cmdstanpy import CmdStanModel, from_csv
+from cmdstanpy import CmdStanModel
+import numpy as np
 import polars as pl
-
-from src.languages import get_languages
-from src.words import get_words
-from src.syllables import get_syllables
 
 
 @dataclass
 class Conf:
     seed: int = 1234
-    iter_sampling: int = 2_000
-    iter_warmup: int = 2_000
+    iter_sampling: int = 500
+    iter_warmup: int = 500
     chains: int = cpu_count() // 4
     parallel_chains: int = cpu_count() // 4
-    adapt_delta: float = 0.95
-    step_size: float = 0.01
-    output_dir: Path = Path("model", "samples")
+    adapt_delta: float | None = 0.95
+    step_size: float | None = 0.01
+    output_dir: Path | None = None
 
 
 def get_stan_data(x: pl.DataFrame) -> dict:
@@ -33,87 +28,74 @@ def get_stan_data(x: pl.DataFrame) -> dict:
     """
     freqs = (x["freq"] - x["freq"].mean()) / x["freq"].std()
     j = x["iso639p3code"].cast(pl.Categorical).to_physical() + 1
-    return {
-        "N": len(x),
-        "J": len(set(x["iso639p3code"])),
-        "y": x["is_ssp"].to_list(),
-        "j": j.to_list(),
-        "x": freqs.to_list(),
-    }
+    y = [int(i) for i in x["is_ssp"].to_list()]
+    n_j = len(set(x["iso639p3code"]))
+
+    return {"N": len(x), "J": n_j, "y": y, "j": j.to_list(), "x": freqs.to_list()}
 
 
 def fit_model(
     stan_data: dict,
     stan_file: Path | str = Path("model/model.stan"),
-    overwrite: bool = False,
     conf: Conf = Conf(),
-    **kwargs,
 ):
     model = CmdStanModel(stan_file=str(stan_file))
+    samples = model.sample(data=stan_data, **asdict(conf))
 
-    conf.output_dir.mkdir(exist_ok=True)
-    files = conf.output_dir.glob("*.csv")
-    is_empty = len(list(files)) == 0
+    return model, samples
 
-    if overwrite or is_empty:
-        samples = model.sample(data=stan_data, **asdict(conf), **kwargs)
-    else:
-        samples = from_csv(conf.output_dir)
 
-    idata = az.from_cmdstanpy(
-        posterior=samples,
-        observed_data={"y": stan_data["y"]},
-        # posterior_predictive={"y": "y_rep"},
-        # log_likelihood={"y": "log_lik"},
-    )
+def synth_data(
+    n: int = 20, j: int = 4, theta: float = 0.9, sigma_mu: float = 0.1, beta: float = 0
+):
+    x = np.random.normal(0, 0.5, n)
+    groups = np.array(range(1, j + 1))
+    groups = np.hstack([groups, np.random.randint(1, j + 1, n - j)])
+    np.random.shuffle(groups)
 
-    return model, samples, idata
+    mu = np.random.normal(0, sigma_mu, j)
+    mu_dict = {int(k): v for k, v in zip(range(1, j + 1), mu)}
+
+    beta_1 = np.log(theta / (1 - theta))
+    beta_2 = beta
+
+    theta_i = []
+    for ji, xi in zip(groups, x):
+        logit = (beta_1 + mu_dict.get(int(ji), 0)) + (beta_2 * xi)
+        theta_i.append(np.exp(logit) / (1 + np.exp(logit)))
+
+    y = np.random.binomial(1, theta_i)
+    data = {"N": n, "J": j, "j": groups, "y": y, "x": x}
+    params = {
+        "beta_1": float(beta_1),
+        "beta_2": float(beta_2),
+        "mu": [float(i) for i in list(mu_dict.values())],
+        "sigma_mu": sigma_mu,
+    }
+    return data, params
+
+
+def get_posterior(samples: pl.DataFrame, params: list[str] | None = None):
+    if params is None:
+        params = []
+
+    df = samples.summary()
+    df.index.name = "param"
+    df.reset_index(inplace=True)
+    df = pl.from_pandas(df)
+
+    target_cols = {"50%": "median", "5%": "lower", "95%": "upper", "R_hat": "rhat"}
+
+    post = df.select(["param"] + list(target_cols.keys())).rename(target_cols)
+    if params:
+        post = post.filter(pl.col("param").str.contains(params))
+
+    return post
 
 
 if __name__ == "__main__":
-    langs = get_languages()
-    words = get_words(langs)
-    sylls = get_syllables(words).drop_nulls(["freq"])
-
-    # prior
-    conf: Conf = Conf(output_dir=Path("model", "samples"))
-    stan_data = get_stan_data(sylls)
+    # model calibration
+    stan_data, params = synth_data(n=1000, j=4, theta=0.80, sigma_mu=1, beta=0)
     stan_file = Path("model/model.stan")
-    model, samples, idata = fit_model(stan_data, stan_file, conf=conf, overwrite=True)
-
-    azp.plot_rank_dist(idata, var_names=["beta", "sigma_mu"])
-
-    post = samples.summary()
-    post.index.name = "param"
-    post.reset_index(inplace=True)
-    post = pl.from_pandas(post)
-
-    target_cols = {"50%": "median", "5%": "lower", "95%": "upper"}
-    old_names = list(target_cols.keys())
-    new_names = list(target_cols.values())
-    intercept = (
-        post.filter(pl.col("param") == "beta[1]")
-        .select(["param"] + old_names)
-        .rename(target_cols)
-        .with_columns(
-            median=pl.col("median").exp() / (1 + pl.col("median").exp()),
-            lower=pl.col("lower").exp() / (1 + pl.col("lower").exp()),
-            upper=pl.col("upper").exp() / (1 + pl.col("upper").exp()),
-        )
-        .to_dicts()[0]
-    )
-    a = (
-        post.filter(pl.col("param").str.starts_with("mu"))
-        .select(["param"] + list(target_cols.keys()))
-        .rename(target_cols)
-        .with_columns(
-            median_s=pl.col("median") + intercept["median"],
-            lower_s=pl.col("median") + intercept["lower"],
-            upper_s=pl.col("median") + intercept["upper"],
-        )
-        .with_columns(
-            median_p=pl.col("median_s").exp() / (1 + pl.col("median_s").exp()),
-            lower_p=pl.col("lower_s").exp() / (1 + pl.col("lower_s").exp()),
-            upper_p=pl.col("upper_s").exp() / (1 + pl.col("upper_s").exp()),
-        )
-    )
+    model, samples = fit_model(stan_data, stan_file)
+    post = get_posterior(samples)
