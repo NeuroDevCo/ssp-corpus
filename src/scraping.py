@@ -2,12 +2,11 @@
 
 """Get pronunciations from Wiktionary."""
 
-from languages import iso639_p3_to_name
-from argparse import ArgumentParser
 from datetime import datetime
 from logging import Logger, ERROR
 from pathlib import Path
 
+from languages import iso639_p3_to_name
 
 from rich.console import Console
 from wikipron import Config, scrape

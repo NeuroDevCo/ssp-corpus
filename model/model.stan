@@ -4,6 +4,7 @@ data {
   
   array[N] int<lower=0, upper=1> y; // binary response variable (0 or 1)
   array[N] real x; // predictor variable (standardized)
+  
   array[N] int<lower=1, upper=J> j; // group index for each observation
 }
 parameters {
@@ -18,9 +19,9 @@ transformed parameters {
 }
 model {
   // prior
-  beta ~ normal(0, 10);
-  sigma_mu ~ exponential(5);
-  z_mu ~ normal(0, 0.5);
+  beta ~ normal(0, 0.25);
+  sigma_mu ~ exponential(2);
+  z_mu ~ normal(0, 0.4);
   
   // likelihood
   y ~ bernoulli_logit((beta[1] + mu[j]) + (beta[2] * to_vector(x)));

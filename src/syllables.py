@@ -1,4 +1,3 @@
-from jinja2.nodes import With
 from pathlib import Path
 from warnings import warn
 
@@ -174,8 +173,9 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
         )
         .filter(pl.col("struct").str.count_matches("V") == 1)
         .group_by(["iso639p3code", "syll", "struct"])
-        .agg(pl.col("freq").sum())
+        .agg(pl.col("freq_pmw").sum())
         .with_columns(
+            freq=(pl.col("freq_pmw") + 0.01).log10() + 3,
             n_phon=pl.col("syll").str.len_chars(),
             sonority=pl.col("syll")
             .str.extract_all(".")
@@ -212,7 +212,15 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
             print(e)
 
     syll = pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
-    cols_keep = ["iso639p3code", "syll", "struct", "sonority", "freq", "is_ssp"]
+    cols_keep = [
+        "iso639p3code",
+        "syll",
+        "struct",
+        "sonority",
+        "freq_pmw",
+        "freq",
+        "is_ssp",
+    ]
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
     syll.write_parquet(Path("out/syllables.parquet"))

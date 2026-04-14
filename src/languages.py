@@ -1,10 +1,8 @@
 """Get pronunciations from Wiktionary."""
 
-from functools import lru_cache
 from pathlib import Path
 
 from iso639 import Language
-from lingtypology import datasets
 import polars as pl
 from rich.console import Console
 
@@ -54,25 +52,8 @@ def get_glottolog() -> pl.DataFrame:
     return pl.DataFrame(df)
 
 
-@lru_cache
-def get_phoible() -> pl.DataFrame:
-    """Get phonological repertoire size for each language."""
-    names = ["glottocode", "phonemes", "consonants", "vowels"]
-    phoible = datasets.Phoible()
-    phoible.show_citation = False
-    phoible = pl.from_pandas(phoible.get_df()[names]).unique("glottocode")
-    names = {
-        "phonemes": "phon_size_all",
-        "consonants": "phon_size_c",
-        "vowels": "phon_size_v",
-    }
-
-    return phoible.rename(names)
-
-
 def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.DataFrame:
     glottolog = get_glottolog()
-    phoible = get_phoible()
 
     cols_select = [
         "iso639p3code",
@@ -81,15 +62,9 @@ def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.Dat
         "family_id",
         "latitude",
         "longitude",
-        "phon_size_all",
-        "phon_size_c",
-        "phon_size_v",
     ]
-    df = (
-        glottolog.join(phoible, on=["glottocode"], how="left")
-        .select(cols_select)
-        .sort("iso639p3code")
-    )
+
+    df = glottolog.select(cols_select).sort("iso639p3code")
 
     if file:
         df.write_parquet(Path(file))
@@ -101,6 +76,14 @@ def iso639_p3_to_p1(p3: str):
     try:
         lang = Language.from_part3(p3)
         return str(lang.part1)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
+def iso639_p1_to_p3(p1: str):
+    try:
+        lang = Language.from_part1(p1)
+        return str(lang.part3)
     except (LookupError, ValueError, AttributeError):
         return
 
