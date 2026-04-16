@@ -5,6 +5,7 @@ from pathlib import Path
 from cmdstanpy import CmdStanModel, CmdStanMCMC
 import numpy as np
 import polars as pl
+from scipy.stats import zipf
 
 
 @dataclass
@@ -111,7 +112,11 @@ def get_posterior(samples: CmdStanMCMC, params: str | list[str] | None = None):
 
 
 def get_epreds(
-    samples: CmdStanMCMC, data: dict, n_draws: int = 50, scale: str = "prob"
+    samples: CmdStanMCMC,
+    data: dict,
+    n_draws: int = 50,
+    scale: str = "prob",
+    group_adj: bool = True,
 ):
 
     if scale not in ("logit", "prob"):
@@ -125,6 +130,10 @@ def get_epreds(
         draw_idx = np.random.randint(0, n_samples - 1, n_draws)
         draws_beta = draws_beta[draw_idx]
         draws_mu = draws_mu[draw_idx]
+
+    if not group_adj:
+        draws_mu = np.zeros_like(draws_mu)[:, 0]
+        draws_mu = np.expand_dims(draws_mu, 1)
 
     # new x values
     n_vals = len(data["x"])
@@ -147,6 +156,58 @@ def get_epreds(
         out.append(p)
 
     return np.stack(out)
+
+
+def get_mrp_estimates(
+    samples: CmdStanMCMC,
+    data: dict,
+    n_draws: int = 50,
+    scale: str = "prob",
+    group_adj: bool = True,
+):
+
+    if scale not in ("logit", "prob"):
+        raise ValueError("scale must be 'logit' or 'prob'")
+
+    draws_beta = samples.stan_variable("beta")  # [chains, draws, 2]
+    draws_mu = samples.stan_variable("mu")  # [chains, draws, J]
+
+    n_samples = len(draws_beta)
+    if n_draws < n_samples:
+        draw_idx = np.random.randint(0, n_samples - 1, n_draws)
+        draws_beta = draws_beta[draw_idx]
+        draws_mu = draws_mu[draw_idx]
+
+    if not group_adj:
+        draws_mu = np.zeros_like(draws_mu)[:, 0]
+        draws_mu = np.expand_dims(draws_mu, 1)
+
+    # new x values
+    n_samples = len(draws_beta)
+    x_new = data["x"]
+    freq_p = np.round(zipf(a=2).pmf(x_new) * 1e2).astype(np.int32)
+    x_new = np.repeat(x_new, freq_p)
+    n_vals = len(x_new)
+    X_new = np.vstack([np.ones_like(x_new), x_new])
+
+    out = []
+    for mu_j in draws_mu.T:
+        mu_mat = np.stack([np.zeros(n_samples), mu_j])
+        mu = np.repeat(np.expand_dims(mu_mat.T, 0), n_vals, 0)
+        X = np.repeat(np.expand_dims(X_new, 2), n_samples, 2)
+        beta = np.repeat(np.expand_dims(draws_beta, 0), n_vals, 0)
+
+        p = np.sum((beta + mu) * X.transpose(1, 2, 0), 2).mean(1)
+
+        if scale == "prob":
+            p = np.exp(p) / (1 + np.exp(p))
+
+        out.append(p)
+
+    freq_n = 10 ** (x_new - 3)
+    mrp = freq_n * freq_p
+    mrp_mat = np.expand_dims(mrp, (0, 2))
+    preds_mrp = (preds * mrp_mat) / mrp_mat.sum()
 
 
 if __name__ == "__main__":

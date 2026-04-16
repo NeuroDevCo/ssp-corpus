@@ -3,7 +3,7 @@ from tempfile import tempdir
 
 import polars as pl
 from rich.progress import track
-from wordfreq import zipf_frequency, word_frequency
+from wordfreq import zipf_frequency
 
 from src.languages import get_languages, iso639_p3_to_p1
 from src.utils import add_lang_col, benchmark

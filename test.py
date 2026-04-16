@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 
 def sim_data():
-    n_pop = np.array([0.6, 0.2, 0.1, 0.05, 0.05])
+    n_pop = np.array([5, 20, 10, 5, 5])
     ssp_pop = np.array([0.6, 0.7, 0.8, 0.9, 1.0])
     ssp_true = sum(ssp_pop * n_pop) / sum(n_pop)
 
@@ -11,7 +11,7 @@ def sim_data():
     p_obs = np.array([0.4, 0.35, 0.3, 0.25, 0.2])
 
     sylls = np.random.choice(range(5), N, replace=True, p=p_obs / p_obs.sum())
-    group, counts = np.unique(sylls, return_counts=True)
+    _, counts = np.unique(sylls, return_counts=True)
     ssp_group = [np.random.binomial(1, p, size=n) for p, n in zip(ssp_pop, counts)]
     ssp = np.concatenate(ssp_group)
     ssp_obs = ssp.mean()
