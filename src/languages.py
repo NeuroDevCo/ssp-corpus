@@ -6,6 +6,8 @@ from iso639 import Language
 import polars as pl
 from rich.console import Console
 
+from src import utils
+
 CON: Console = Console()
 
 
@@ -52,7 +54,9 @@ def get_glottolog() -> pl.DataFrame:
     return pl.DataFrame(df)
 
 
-def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.DataFrame:
+def get_languages(
+    file: Path | str = utils.OUT_PATH / "languages.parquet",
+) -> pl.DataFrame:
     glottolog = get_glottolog()
 
     cols_select = [
@@ -65,9 +69,7 @@ def get_languages(file: Path | str = Path("out", "languages.parquet")) -> pl.Dat
     ]
 
     df = glottolog.select(cols_select).sort("iso639p3code")
-
-    if file:
-        df.write_parquet(Path(file))
+    df.write_parquet(Path(file))
 
     return df
 
@@ -104,5 +106,9 @@ def iso639_name_to_p3(name: str):
         return
 
 
+def main():
+    return get_languages()
+
+
 if __name__ == "__main__":
-    langs = get_languages()
+    langs = main()

@@ -8,8 +8,7 @@ from panphon.sonority import Sonority
 import polars as pl
 from rich.progress import track
 
-IN_PATH: Path = Path("data/raw")
-OUT_PATH: Path = Path("data/processed/syllables")
+from src import utils
 
 
 FT = FeatureTable().seg_dict
@@ -166,16 +165,14 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
 
     df = (
         x.explode("syll")
+        .unique(["iso639p3code", "syll"])
         .with_columns(
             struct=pl.col("syll").map_elements(
                 classify_segments, return_dtype=pl.String
             )
         )
         .filter(pl.col("struct").str.count_matches("V") == 1)
-        .group_by(["iso639p3code", "syll", "struct"])
-        .agg(pl.col("freq_pmw").sum())
         .with_columns(
-            freq=(pl.col("freq_pmw") + 0.01).log10() + 3,
             n_phon=pl.col("syll").str.len_chars(),
             sonority=pl.col("syll")
             .str.extract_all(".")
@@ -206,7 +203,7 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
             syll.append(df)
 
             lang = lang_words.unique("iso639p3code").get_column("iso639p3code")
-            df.write_parquet(OUT_PATH / f"{lang[0]}.parquet")
+            df.write_parquet(utils.SYLL_PATH / f"{lang[0]}.parquet")
 
         except pl.exceptions.NoDataError as e:
             print(e)
@@ -217,18 +214,20 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
         "syll",
         "struct",
         "sonority",
-        "freq_pmw",
-        "freq",
         "is_ssp",
     ]
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
-    syll.write_parquet(Path("out/syllables.parquet"))
+    syll.write_parquet(utils.OUT_PATH / "syllables.parquet")
 
     return syll
 
 
+def main():
+    w = pl.read_parquet(utils.OUT_PATH / "words.parquet")
+
+    return get_syllables(w)
+
+
 if __name__ == "__main__":
-    langs = pl.read_parquet(Path("out/languages.parquet"))
-    words = pl.read_parquet(Path("out/words.parquet"))
-    sylls = get_syllables(words)
+    s = main()

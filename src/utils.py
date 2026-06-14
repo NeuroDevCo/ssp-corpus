@@ -5,6 +5,16 @@ from time import time
 
 import polars as pl
 
+IN_PATH = Path("data/raw")
+OUT_PATH = Path("out")
+SYLL_PATH = Path("data/processed/syllables")
+WORD_PATH = Path("data/processed/words")
+IMG_PATH: Path = Path("img")
+
+
+SYLL_PATH.mkdir(parents=True, exist_ok=True)
+WORD_PATH.mkdir(parents=True, exist_ok=True)
+
 
 def benchmark(func):
     """Print the runtime of a decorated function"""

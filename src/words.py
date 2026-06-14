@@ -1,59 +1,9 @@
 from pathlib import Path
-from tempfile import tempdir
 
 import polars as pl
 from rich.progress import track
-from wordfreq import zipf_frequency
 
-from src.languages import get_languages, iso639_p3_to_p1
-from src.utils import add_lang_col, benchmark
-
-IN_PATH: Path = Path("data/raw")
-OUT_PATH: Path = Path("data/processed/words")
-
-
-@benchmark
-def get_frequencies(
-    x: pl.DataFrame, file: Path | str = Path("out/frequencies.parquet")
-):
-    file = Path(file)
-    if file.exists():
-        return pl.read_parquet(file)
-
-    if len(x) == 0:
-        return
-
-    langs_lookup = {p3: iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())}
-
-    df = (
-        x.with_columns(
-            pl.col("iso639p3code").replace(langs_lookup).alias("iso639p1code")
-        )
-        .select(["iso639p1code", "iso639p3code", "word"])
-        .unique(["iso639p3code", "word"])
-    )
-
-    temp_file = Path(str(tempdir)) / "frequencies.txt"
-    msg = f"FREQS: {len(df):,} words"
-    with temp_file.open("w+") as f:
-        f.write(",".join(["word", "iso639p3code", "freq", "freq_pmw"]) + "\n")
-
-        for p1, p3, w in track(df.iter_rows(named=False), msg, len(df)):
-            if not p1:
-                continue
-            try:
-                freq = zipf_frequency(w, p1)
-                freq_pmw = 10 ** (freq - 3)
-            except LookupError:
-                continue
-            if not freq:
-                continue
-            data = ",".join([w, p3, str(freq), str(freq_pmw) if freq else ""])
-            f.write(data + "\n")
-
-    df = pl.read_csv(temp_file).sort(pl.col(["iso639p3code", "freq"]))
-    df.write_parquet(file)
-    return df
+from src import languages, utils
 
 
 def get_lang_words(
@@ -102,42 +52,37 @@ def get_lang_words(
     return pl.DataFrame(df)
 
 
-def get_words(languages: pl.DataFrame | None = None, min_words: int = 100):
-    if languages is None:
-        languages = get_languages()
+def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
+    if langs is None:
+        langs = languages.get_languages()
 
     words = []
 
-    OUT_PATH.mkdir(parents=True, exist_ok=True)
-    n_lang = len(languages)
+    n_lang = len(langs)
     msg = f"WORDS: {n_lang:,} languages"
-    for lang in track(languages["iso639p3code"].to_list(), msg, n_lang):
+    for lang in track(langs["iso639p3code"].to_list(), msg, n_lang):
         try:
-            df = add_lang_col(get_lang_words(IN_PATH / f"{lang}.csv"), lang)
+            df = utils.add_lang_col(get_lang_words(utils.IN_PATH / f"{lang}.csv"), lang)
             df = df.unique(["word", "phon", "iso639p3code"])
 
             if len(df) < min_words:
                 continue
 
             words.append(df)
-            df.write_parquet(OUT_PATH / f"{lang}.parquet")
+            df.write_parquet(utils.WORD_PATH / f"{lang}.parquet")
         except (FileNotFoundError, pl.exceptions.NoDataError):
             continue
 
     words = pl.concat(words) if len(words) > 0 else pl.DataFrame()
-
-    freqs = get_frequencies(words)
-    on = list(set(words.columns).intersection(freqs.columns))
-    words = words.join(freqs, on=on, how="left").join(
-        languages.select("iso639p3code"), on="iso639p3code", how="left"
-    )
-
-    words.write_parquet(Path("out/words.parquet"))
+    words.write_parquet(utils.OUT_PATH / "words.parquet")
 
     return words
 
 
+def main():
+    langs = pl.read_parquet(utils.OUT_PATH / "languages.parquet")
+    return get_words(langs)
+
+
 if __name__ == "__main__":
-    langs = get_languages()
-    words = get_words(langs)
-    freqs = get_frequencies(words)
+    w = main()
