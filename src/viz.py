@@ -80,7 +80,7 @@ def plot_results():
             colors=[COLOR],
             linewidths=[1],
         )
-        ax.scatter(d["median"], d["param"], c=COLOR, s=2)
+        ax.scatter(d["median"], d["param"], c=COLOR, s=10)
         # ax.scatter(d["is_ssp"], d["param"], c="orange", s=20, marker="|", zorder=-1)
 
         ax.tick_params(axis="y", labelsize=6.5)

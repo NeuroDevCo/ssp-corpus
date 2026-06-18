@@ -48,7 +48,7 @@ def get_stan_data(x: pl.DataFrame, names: bool = True) -> dict:
 
     if names:
         out["j_names"] = data["iso639p3code"].to_list()
-        print(out["j_names"])
+
     return out
 
 

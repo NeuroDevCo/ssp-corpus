@@ -1,4 +1,3 @@
-from pathlib import Path
 from warnings import warn
 
 from iso639 import Language, LanguageNotFoundError
@@ -152,7 +151,7 @@ def iso639_p3_to_p1(p3: str):
         return
 
 
-def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
+def get_lang_syllables(x: pl.DataFrame, freq_only: bool = False) -> pl.DataFrame | None:
     """
     Get syllables from a words database.
 
@@ -162,6 +161,8 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
     Returns:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
+    if freq_only:
+        x = x.filter(pl.col("freq_pmw").is_not_null())
 
     df = (
         x.explode("syll")
@@ -172,23 +173,32 @@ def get_lang_syllables(x: pl.DataFrame) -> pl.DataFrame | None:
             )
         )
         .filter(pl.col("struct").str.count_matches("V") == 1)
-        .with_columns(
-            n_phon=pl.col("syll").str.len_chars(),
-            sonority=pl.col("syll")
-            .str.extract_all(".")
-            .list.eval(pl.element().replace(SON)),
+    )
+
+    if freq_only:
+        df = (
+            df.group_by(["iso639p3code", "syll", "struct"])
+            .agg(pl.col("freq_pmw").sum())
+            .with_columns(freq=(pl.col("freq_pmw") + 0.01).log10() + 3)
         )
-        .with_columns(
-            is_ssp=pl.col("sonority").map_elements(
-                has_one_peak, return_dtype=pl.Boolean
-            )
-        )
+    else:
+        df = df.unique(["syll"])
+
+    df = df.with_columns(
+        n_phon=pl.col("syll").str.len_chars(),
+        sonority=pl.col("syll")
+        .str.extract_all(".")
+        .list.eval(pl.element().replace(SON)),
+    ).with_columns(
+        is_ssp=pl.col("sonority").map_elements(has_one_peak, return_dtype=pl.Boolean),
     )
 
     return df
 
 
-def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
+def get_syllables(
+    words: pl.DataFrame, min_syll: int = 100, freq_only: bool = False
+) -> pl.DataFrame:
     """Main script."""
 
     syll = []
@@ -197,7 +207,7 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
     msg = f"SYLLABLES: {len(part_words):,} languages"
     for lang_words in track(part_words, msg, len(part_words)):
         try:
-            df = get_lang_syllables(lang_words)
+            df = get_lang_syllables(lang_words, freq_only=freq_only)
             if df is None or len(df) < min_syll:
                 continue
             syll.append(df)
@@ -209,16 +219,16 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
             print(e)
 
     syll = pl.concat(syll) if len(syll) > 0 else pl.DataFrame()
-    cols_keep = [
-        "iso639p3code",
-        "syll",
-        "struct",
-        "sonority",
-        "is_ssp",
-    ]
+    cols_keep = ["iso639p3code", "syll", "struct", "sonority", "is_ssp"]
+
+    fn = "syllables"
+
+    if freq_only:
+        cols_keep += ["freq"]
+        fn += "_freq"
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
-    syll.write_parquet(utils.OUT_PATH / "syllables.parquet")
+    syll.write_parquet((utils.OUT_PATH / fn).with_suffix(".parquet"))
 
     return syll
 
@@ -226,7 +236,7 @@ def get_syllables(words: pl.DataFrame, min_syll: int = 100) -> pl.DataFrame:
 def main():
     w = pl.read_parquet(utils.OUT_PATH / "words.parquet")
 
-    return get_syllables(w)
+    return get_syllables(w), get_syllables(w, freq_only=True)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,57 @@
 from pathlib import Path
+from tempfile import tempdir
 
 import polars as pl
 from rich.progress import track
+from wordfreq import zipf_frequency
 
 from src import languages, utils
+
+
+@utils.benchmark
+def get_frequencies(
+    x: pl.DataFrame, file: Path | str = Path("out/frequencies.parquet")
+):
+    file = Path(file)
+    if file.exists():
+        return pl.read_parquet(file)
+
+    if len(x) == 0:
+        return
+
+    langs_lookup = {
+        p3: languages.iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())
+    }
+
+    df = (
+        x.with_columns(
+            pl.col("iso639p3code").replace(langs_lookup).alias("iso639p1code")
+        )
+        .select(["iso639p1code", "iso639p3code", "word"])
+        .unique(["iso639p3code", "word"])
+    )
+
+    temp_file = Path(str(tempdir)) / "frequencies.txt"
+    msg = f"FREQS: {len(df):,} words"
+    with temp_file.open("w+") as f:
+        f.write(",".join(["word", "iso639p3code", "freq", "freq_pmw"]) + "\n")
+
+        for p1, p3, w in track(df.iter_rows(named=False), msg, len(df)):
+            if not p1:
+                continue
+            try:
+                freq = zipf_frequency(w, p1)
+                freq_pmw = 10 ** (freq - 3)
+            except LookupError:
+                continue
+            if not freq:
+                continue
+            data = ",".join([w, p3, str(freq), str(freq_pmw) if freq else ""])
+            f.write(data + "\n")
+
+    df = pl.read_csv(temp_file).sort(pl.col(["iso639p3code", "freq"]))
+    df.write_parquet(file)
+    return df
 
 
 def get_lang_words(
@@ -74,6 +122,13 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
             continue
 
     words = pl.concat(words) if len(words) > 0 else pl.DataFrame()
+
+    freqs = get_frequencies(words)
+    on = list(set(words.columns).intersection(freqs.columns))
+    words = words.join(freqs, on=on, how="left").join(
+        langs.select("iso639p3code"), on="iso639p3code", how="left"
+    )
+
     words.write_parquet(utils.OUT_PATH / "words.parquet")
 
     return words

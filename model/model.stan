@@ -13,7 +13,7 @@ parameters {
 
 model {
   mu ~ normal(0, 10);
-  sigma ~ normal(0, 10);      // Half-normal prior
+  sigma ~ exponential(2);      // Half-normal prior
   gamma ~ normal(0, 10);
   u ~ normal(0, sigma);
 
