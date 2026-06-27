@@ -9,8 +9,8 @@ IN_PATH = Path("data/raw")
 OUT_PATH = Path("out")
 SYLL_PATH = Path("data/processed/syllables")
 WORD_PATH = Path("data/processed/words")
-IMG_PATH: Path = Path("img")
-
+IMG_PATH = Path("img")
+MODEL_PATH = Path("model")
 
 SYLL_PATH.mkdir(parents=True, exist_ok=True)
 WORD_PATH.mkdir(parents=True, exist_ok=True)

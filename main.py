@@ -1,16 +1,44 @@
 """Main script."""
 
-from src import languages, model, syllables, words
+import argparse
 
+from rich.console import Console
 
-def main():
-    langs = languages.main()
-    w = words.main()
-    s = syllables.main()
-    p = model.main()
-
-    return langs, w, s, p
+from src import languages, model, syllables, viz, words
 
 
 if __name__ == "__main__":
-    langs, w, s, p = main()
+    parser = argparse.ArgumentParser(
+        prog="ssp-corpus",
+        description="Preprocess language datasets, models and generate figures.",
+    )
+
+    parser.add_argument("-l", "--langs", action="store_true")
+    parser.add_argument("-w", "--words", action="store_true")
+    parser.add_argument("-s", "--syllables", action="store_true")
+    parser.add_argument("-m", "--model", action="store_true")
+    parser.add_argument("-v", "--viz", action="store_true")
+
+    args = parser.parse_args()
+
+    con = Console()
+
+    if args.langs:
+        con.rule("Preparing Glottolog language dataset")
+        langs = languages.main()
+
+    if args.words:
+        con.rule("Preprocessing word forms")
+        w = words.main()
+
+    if args.syllables:
+        con.rule("Extracting syllables")
+        s = syllables.main()
+
+    if args.model:
+        con.rule("Fitting Bayesian models")
+        post_ssp, post_freq = model.main()
+
+    if args.viz:
+        con.rule("Making figures")
+        viz.main()

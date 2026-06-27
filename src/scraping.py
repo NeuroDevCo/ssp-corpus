@@ -6,12 +6,10 @@ from datetime import datetime
 from logging import Logger, ERROR
 from pathlib import Path
 
-from languages import iso639_p3_to_name
-
 from rich.console import Console
 from wikipron import Config, scrape
 
-from src.languages import get_languages
+from src import languages
 
 logger = Logger("pyppeteer", ERROR)
 
@@ -24,7 +22,7 @@ class EmptyLanguage(Exception):
 
 def scrape_language(
     lang: str,
-    path: Path | str = Path("data", "raw"),
+    path: Path = Path("data/raw"),
     delete_empty: bool = True,
     **kwargs,
 ):
@@ -36,9 +34,8 @@ def scrape_language(
         delete_empty (bool, optional): Should empty CSV be deleted? Defaults to True.
         **kwargs: Additional arguments passed to `wikipron.Config`.
     """
-    path = Path(path)
     time = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
-    lang_label = f"{lang} ({iso639_p3_to_name(lang)})"
+    lang_label = f"{lang} ({languages.iso639_p3_to_name(lang)})"
     CON.print(f"{lang_label} | [blue]Started[/blue] | {time}")
 
     kw = {"key": lang, "syllable_boundaries": True, "stress": True}
@@ -63,15 +60,15 @@ def scrape_language(
         fn.unlink()
 
 
-def scrape_all_languages(languages: str | list[str] | None = None, n_workers: int = 4):
+def scrape_all_languages(langs: str | list[str] | None = None):
     """Scrape all languages."""
-    if isinstance(languages, str):
-        languages = [languages]
+    if isinstance(langs, str):
+        langs = [langs]
 
-    if languages is None:
-        languages = get_languages().get_column("iso639p3code").to_list()
+    if langs is None:
+        langs = languages.get_languages().get_column("iso639p3code").to_list()
 
-    for lang in languages:
+    for lang in langs:
         try:
             scrape_language(lang)
         except (ValueError, KeyError, KeyboardInterrupt, FileNotFoundError) as e:

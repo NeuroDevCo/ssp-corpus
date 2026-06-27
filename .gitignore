@@ -189,3 +189,4 @@ model
 
 
 out/*.parquet
+out/childes-freqs/

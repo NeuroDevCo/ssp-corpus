@@ -1,3 +1,29 @@
+```{python}
+#| label: setup
+from pathlib import Path
+import sys
+import iso639
+
+from great_tables import GT, md, html, from_column, style, loc
+from matplotlib import pyplot as plt
+import numpy as np
+import polars as pl
+import xarray as xr
+
+from src import languages, scraping, viz
+
+MODEL_PATH = Path("../model")
+RESULTS_PATH = Path("../out")
+
+langs = pl.read_parquet(RESULTS_PATH / "languages.parquet")
+w = pl.read_parquet(RESULTS_PATH / "words.parquet")
+s = pl.read_parquet(RESULTS_PATH / "syllables.parquet")
+sf = pl.read_parquet(RESULTS_PATH / "syllables_freq.parquet")
+f = pl.read_parquet(RESULTS_PATH / "frequencies.parquet")
+p_ssp = pl.read_parquet(RESULTS_PATH / "posterior_ssp.parquet")
+p_freq = pl.read_parquet(RESULTS_PATH / "posterior_freq.parquet")
+```
+
 # Introduction
 
 Speech is made of hierarchically organised, discrete linguistic units (e.g., phonemes, syllables, words, phrases). Syllables are a privileged linguistic unit in speech processing, particularly during early language acquisition: newborns preferentially chunk the speech signal into syllable-sized units [@bijeljac-babic1993how; @flo2019newborns]. This is remarkable, given they have accumulated a relatively limited linguistic experience. The mechanisms underlying syllable identification are still unclear.
@@ -90,25 +116,6 @@ $$ {#eq-model}
 
 ## Method
 
-```{python}
-from pathlib import Path
-import sys
-import iso639
-from whoosh.lang.lovins import O
-
-from great_tables import GT, md, html, from_column, style, loc
-from matplotlib import pyplot as plt
-import numpy as np
-import polars as pl
-
-from src import scraping, figures
-
-OUT_PATH: Path = Path("out")
-```
-
-
-
-### Dataset acquisition
 
 ```{python}
 langs = pl.read_parquet(OUT_PATH / "languages.parquet")
@@ -133,88 +140,76 @@ All `{python} len(languages)` languages included in the Glottolog database were 
 
 ![Distribution of the `{python} len(languages)` languages included in the final dataset. Black dots indicate the location assigned to each language by Glottolog. The color and size of the shaded circles indicate the language family and estimated population of speakers of each language, respectively. The size of the empty black circles indicate the number of pronunciations retrived from each language. Large divergencies between the size of the shaded and empty circles indicate the the language is over or under-represented in the dataset.](../img/map.png){#fig-map}
 
-
 For each language, and for each retrieved pronunciation, we chunked the phonological word-forms into syllable candidates by splitting the IPA transcription at syllabic boundaries, primary and secondary stress markers. The dataset of each language was then expanded to assign one row to each syllable candidate. Languages with less than 20 unique syllables were filtered out. We then used the `panphon` Python package [@mortensen2016panphon] to extract the features of each syllable candidate. First, we split the phonological form of the syllable candidate into phonological segments. Second, we classified each segment as consonant (C) or vowel (V). Glides were classified as vowels. Third, we counted the number of vocalic clusters (number of group of consecutive segments classified as vocalic) in each syllable candidate. If more than cluster was detected, the syllable candidate was considered to include more than one syllable and was filtered out. This was the case when the original phonological form of the word retrieved from Wiktionary did not include syllabic boundaries. Finally, we calculated the sonority contour of each syllable: using panphon, we extracted the sonority score of each segment (an integer ranging from 1 to 9). If the sonority contour had more than one local maximum, the syllable was classified as violating the Sonority Sequencing Principle (SSP). If the sonority contour had no peaks (flat) or had only one peak, the syllable was classified as following the SSP.
 
-## Data analysis
 
-We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. This model estimated the average probability of the syllables of language family following the SSP. This model included each family language as a group with a random intercept. @eq-model shows a detailed implementation of both models model. We implemented the model in the probabilistic programming language Stan [@carpenter2017stan] and CmdStanPy, its interface to its Python (3.12.7). We run eight Hamiltonian Monte Carlo chain of 8,000 iterations each (4,000 were warm-up iterations) to estimate the posterior distribution of the model. Model diagnostics and posterior distribution preprocessing were conducted using the ArViZ Python package [@kumar2019arviz]. 
+## How prevalent is the SSP across languages?
 
-$$
-\begin{aligned}
-\textbf{Likelihood:} \\
-y_{[i]} &\sim \text{Binomial}(n_{[i]}, \theta_{[i]}) \\
-\theta_{[i]} &= \text{logit}^{-1}(\alpha_{[i]}) \\
-\textbf{Prior:} \\
-\alpha_{[i]} &\sim \mathcal{N}(, 1)
-\end{aligned}
-$$ {#eq-model}
-
+We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. This model estimated the average probability of the syllables of language family following the SSP. This model included each family language as a group with a random intercept. @eq-model-ssp shows a detailed implementation of both models model. We implemented the model in the probabilistic programming language Stan [@carpenter2017stan] and CmdStanPy, its interface to its Python (3.12.7). We run eight Hamiltonian Monte Carlo chain of 2,000 iterations each (1,000 were warm-up iterations) to estimate the posterior distribution of the model.
 
 $$
 \begin{aligned}
 \textbf{Likelihood:} \\
-y_{[j]i} &\sim \text{Binomial}(n_i, \frac{\theta_{[j]i}}{1 - \theta_{[j]i}}) \\
-\theta_{j[i]} &\sim \mathcal{N}(\mu_j, \sigma_j) \\
+y_j &\sim \text{Binomial}(n_j, \frac{\theta_j}{1 - \theta_j}) \\
+\theta_j &= \mu_j + u_j + (\gamma / n_j) \\
 \text{where:} \\
 &i~\text{represents each observation, corresponding to a language} \\
-&j~\text{represents each language family} \\
-&y_{[j]i}~\text{is the number of syllables in language}~i~\text{that follow SSP} \\
-&n_j~\text{is the number of syllables total language}~i \\
-\textbf{Prior:}
+&y_j~\text{is the number of syllables in language}~i~\text{that follow SSP} \\
+&u_j~\text{is a language-wise adjustment} \\
+&n_i~\text{is the number of syllables total language}~i \\
+&\gamma~\text{introduces an adjustment to}~\mu~\text{that is inverselly proportional to }~n_i\\
+
+\\
+\textbf{Prior:} \\
+\mu_j &\sim \mathcal{N}(0, 5) \\
+\sigma_u &\sim \text{Exponential}(4)
+\end{aligned}
+$$ {#eq-model-ssp}
+
+
+![](/img/ssp-params.png)
+
+![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 95% highest density interval (HDI). Means and 95% HDI are also numerically reported next to each language family.](/img/ssp-groups.png){#fig-estimates-family}
+
+
+## Are SSP-following syllables more frequent than SSP-violating syllables
+
+### Adult lexical frequencies
+
+We extracted adult lexical frequencies for each word-form in the words dataset. We then performed the same steps as described above to expand the dataset into syllables, and evaluate if each of such syllables followed or violated the SSP. In addition, we computed a measure of syllabic frequency: for each syllable, we aggregated the lexical frequency of each word the syllable appeared in. The rationale behind this step is that each time a word is uttered, each of its syllables is also uttered. Therefore, by calculating the lexical frequency of each word a given syllable is involved in, an estimation of syllabic frequency can be derived.
+
+```{python}
+fig, ax = plt.subplots(1, 2)
+for idx, d in enumerate(sf.partition_by("is_ssp")):
+    ax[idx].hist(d["freq"], lw=5, edgecolor="white", bins=20)
+
+```
+
+$$
+\begin{aligned}
+\textbf{Likelihood:} \\
+y_i &\sim \text{LogNormal}(\mu_i, \sigma_i) \\
+\mu_i &= \beta_0 + u_0 + (beta_1 + w_0) \cdot x_i\\
+\sigma_i &= \pi_0 + a_0 + (beta_1 + b_0) \cdot x_i\\
+
+\text{where:} \\
+&i~\text{represents each observation, corresponding to one syllable} \\
+&y_{i}~\text{frequency of the syllable}~i~text{} \\
+&n_{i}~\text{is the number of syllables total language}~i \\
+&\gamma~\text{introduces an adjustment to}~\mu~\text{that is inverselly proportional to }~n_i\\
+
+\\
+\textbf{Prior:} \\
 \mu_j &\sim \mathcal{N}(0, 1) \\
 \sigma_j &\sim \text{Exponential}(4)
 \end{aligned}
-$$ {#eq-model}
+$$ {#eq-model-ssp}
 
-$$
-y_i \sim \text{Binomial}(n_i, \text{logit}^{-1}(\alpha))
-$$
-
-$$
-y_i \sim \text{Binomial}(n_i, \text{logit}^{-1}(\alpha + \eta_{j[i]}))
-$$
-
-## Results
-
-![Posterior model-estimated proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language family. The X-axis indicates the proportion of syllables that follow the SSP. The Y-axis indicates each language family. Black diamonds and intervals indicate the posterior mean proportion of SSP-following syllables for each language family, and its 95% highest density interval (HDI). Means and 95% HDI are also numerically reported next to each language family.](../img/estimates.png){#fig-estimates-family}
-
+![](/img/freq-params.png)
 
 # Appendix
 
-```{python}
-# | label: tbl-proportions
-# | tbl-cap: "Observed proportion of distinct syllables that follow the Sonority Sequencing Principle (SSP) for each language."
 
-npron = words.group_by(["iso639p3code"]).agg(pl.len().alias("n_pron"))
-tbl = (
-    data.join(langs, on="iso639p3code", how="left")
-    .with_columns(
-        pl.col("iso639p3code")
-        .replace_strict(figures.get_color_codes(langs), default="black")
-        .alias("color"),
-    )
-    .select(["lang", "iso639p3code", "family_id", "n", "prop", "color"])
-    .sort("iso639p3code")
-)
-
-(
-    GT(tbl)
-    .fmt_percent(columns=["prop"])
-    .fmt_integer(columns=["n"])
-    .tab_style(style=style.text(size="small"), locations=loc.body())
-    .cols_label(
-        {
-            "lang": "Language",
-            "iso639p3code": "ISO",
-            "family_id": "Language family",
-            "prop": "SSP (%)",
-            "n": "# Syllables",
-        }
-    )
-    .cols_hide(["color"])
-)
-```
 
 ## Appendix
 
