@@ -1,7 +1,9 @@
 """Main script."""
 
 import argparse
+from pathlib import Path
 
+import quarto
 from rich.console import Console
 
 from src import languages, model, syllables, viz, words
@@ -18,6 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--syllables", action="store_true")
     parser.add_argument("-m", "--model", action="store_true")
     parser.add_argument("-v", "--viz", action="store_true")
+    parser.add_argument("-d", "--docs", action="store_true")
 
     args = parser.parse_args()
 
@@ -42,3 +45,7 @@ if __name__ == "__main__":
     if args.viz:
         con.rule("Making figures")
         viz.main()
+
+    if args.docs:
+        con.rule("Rendering documents")
+        quarto.render(Path())

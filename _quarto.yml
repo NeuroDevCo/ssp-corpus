@@ -4,12 +4,8 @@ project:
   execute-dir: project
 
 title: "Estimating the prevalence of the Sonority Sequencing Principle accross languages and language families"
-format: pdf
-bibliography: docs/references.bib
-
-mainfont: Arial
-sansfont: Arial
-monofont: Arial
+format: typst
+bibliography: docs/bibliography.bib
 
 echo: false
 warning: false

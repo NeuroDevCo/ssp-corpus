@@ -4,10 +4,11 @@ from collections import defaultdict
 from pathlib import Path
 import polars as pl
 
+from great_tables import GT
+from great_tables._export import gtsave
 from matplotlib import pyplot as plt
 from matplotlib import colors, ticker
 import numpy as np
-import seaborn as sns
 
 from src import languages, model, utils
 
@@ -73,27 +74,30 @@ def plot_ssp_langs():
 
     counter = defaultdict(int)
 
-    fig, axes = plt.subplots(1, len(p), figsize=(12, 8), sharex=True)
+    fig, axes = plt.subplots(1, len(p), sharex=True)
     for i, d in enumerate(p.values()):
         ax = axes[i]
 
         for r in d.iter_rows(named=True):
-            label = r["family_id"] if counter[r["family_id"]] == 0 else None
-            c = clrs[r["family_id"]]
             y = languages.iso639_p3_to_name(r["param"])
             ax.hlines(
                 y=y,
                 xmin=r["lower"],
                 xmax=r["upper"],
-                colors=[c],
+                colors=[COLOR],
                 linewidths=[1],
             )
-            ax.scatter(r["median"], y, c=c, label=label, marker="|")
-            ax.scatter(r["is_ssp"], y, c=c, marker="x", zorder=-1)
+            ax.scatter(r["median"], y, c=COLOR, marker="|")
+            ax.scatter(r["is_ssp"], y, c="orange", marker="x", zorder=-1)
+
+            label = r["family_id"] if counter[r["family_id"]] == 0 else None
+            ax.scatter(0, y, c=clrs[r["family_id"]], s=10, label=label)
             counter[r["family_id"]] += 1
 
-        ax.tick_params(axis="y", labelsize=6.5)
-        ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
+            ax.text(0.025, y, c="k", fontsize=7, s=y, va="center")
+
+        ax.get_yaxis().set_visible(False)
+        ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f"{x:.0%}"))
         ax.xaxis.grid(True, color="lightgrey", linestyle=":")
 
         ticks = ax.get_yticks()
@@ -103,11 +107,7 @@ def plot_ssp_langs():
         ax2.set_yticklabels(labels, ha="left")
         ax2.tick_params(axis="y", labelsize=5)
 
-        # for row in d.iter_rows(named=True):
-        #     label = row["family_id"] if counter[row["family_id"]] == 0 else None
-        #     ax.scatter(0, row["param"], c=clrs[row["family_id"]], s=5, label=label)
-
-        # counter[row["family_id"]] += 1
+    fig.supxlabel("Proportion of SSP-following syllables (%)", y=0.15)
     fig.tight_layout()
     fig.legend(
         title=r"Language family",
@@ -116,9 +116,34 @@ def plot_ssp_langs():
         frameon=False,
         fontsize=7,
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.05),
+        bbox_to_anchor=(0.5, 0.125),
     )
+    fig.set_size_inches(8, 8)
     fig.savefig(utils.IMG_PATH / "ssp-groups.png", dpi=DPI, bbox_inches="tight")
+
+
+def plot_freq_distribution():
+    sf = pl.read_parquet(utils.OUT_PATH / "syllables_freq.parquet")
+
+    fig, ax = plt.subplots(1, 2, sharex=True)
+    for idx, d in enumerate(sf.partition_by("is_ssp")):
+        ax[idx].hist(d["freq"], lw=2, edgecolor="white", bins=20, color="orange")
+        n = len(d)
+        title = "SSP-following" if all(ssp for ssp in d["is_ssp"]) else "SSP-violating"
+        title += f"\n($n$ = {n:,.0f})"
+        ax[idx].set_title(title)
+        ax[idx].xaxis.grid(True, color="lightgrey", linestyle=":")
+
+        ticks = ax[idx].get_yticks()
+        ax[idx].set_yticks(ticks)
+        labels = [f"{t:,.0f}" for t in ticks]
+        ax[idx].set_yticklabels(labels, ha="right", fontsize=5)
+
+    fig.supxlabel("Syllabic frequency (Zipf)")
+    fig.supylabel("$N$ of syllables")
+    fig.tight_layout()
+    fig.set_size_inches(6, 3)
+    fig.savefig(utils.IMG_PATH / "freq-distribution.png", dpi=800)
 
 
 def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
@@ -143,6 +168,8 @@ def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
 
         _, ypos = ax[idx].get_ylim()
         ypos *= 1.1
+        xpos = ax[idx].get_xlim()
+        xpos = sum(xpos) / len(xpos)
         ax[idx].scatter(p["median"], ypos, s=50, c=COLOR)
         ax[idx].hlines(
             [ypos],
@@ -151,11 +178,12 @@ def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
             linewidths=[5 / 2],
             colors=[COLOR],
         )
-        label = f"{p['median']:.3f} [{p['lower']:.3f}, {p['median']:.3f}]"
-        ax[idx].text(p["median"], ypos * 1.05, label, fontsize=9, ha="center")
+        label = f"{p['median']:.3f} [{p['lower']:.3f}, {p['upper']:.3f}]"
         ax[idx].set_ylim(0, ypos * 1.2)
-        ax[idx].set_title(f"$\\{p['param']}$")
         ax[idx].set_yticks([])
+
+        ax[idx].set_title(f"$\\{p['param']}$\n", weight="bold")
+        ax[idx].text(xpos, ypos * 1.25, label, ha="center", fontsize=8)
 
     fig.set_size_inches(8, 3)
 
@@ -163,12 +191,11 @@ def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
         fig.savefig(file, dpi=800)
 
 
-def plot_freq_params(which: str = "subtlex", file: Path = Path("img/freq-params.png")):
+def plot_freq_params(which: str = "subtlex"):
     if which not in ["subtlex", "childes"]:
         raise ValueError("which must be one of 'subtlex' or 'childes'")
 
-    params = ["beta_0", "beta_1", "pi_0", "pi_1"]
-    s = pl.read_parquet(utils.OUT_PATH / f"syllables_freq_{which}.parquet")
+    params = ["beta_1"]
     post = pl.read_parquet(
         utils.MODEL_PATH / f"freq_{which}" / f"freq_{which}.parquet"
     ).select(params)
@@ -177,47 +204,46 @@ def plot_freq_params(which: str = "subtlex", file: Path = Path("img/freq-params.
         .transpose(header_name="param", include_header=True)
         .rename({"column_0": "median"})
     )
-    lower, upper, p_rope = [], [], []
-    rope = np.std(list(s["freq"])) * -0.1, np.std(list(s["freq"])) * 0.1
+    lower, upper = [], []
 
     for col in post.iter_columns():
         if col.name == "param":
             continue
         lo, up = model.hdi(col.to_numpy())
-        p = model.interval_overlap(rope, (lo, up))
         lower.append(float(lo))
         upper.append(float(up))
-        p_rope.append(p)
 
     out.insert_column(-1, pl.Series("lower", lower))
     out.insert_column(-1, pl.Series("upper", upper))
-    out.insert_column(-1, pl.Series("p_rope", p_rope))
 
     fig, ax = plt.subplots(1, len(params), figsize=(8, 3), tight_layout=True)
-    for idx, (r, p) in enumerate(zip(post.iter_columns(), out.iter_rows(named=True))):
-        ax[idx].hist(r, color="orange", lw=3, edgecolor="white")
+    for r, p in zip(post.iter_columns(), out.iter_rows(named=True)):
+        ax.hist(r, color="orange", lw=3, edgecolor="white")
 
-        _, ypos = ax[idx].get_ylim()
+        _, ypos = ax.get_ylim()
         ypos *= 1.1
-        ax[idx].scatter(p["median"], ypos, s=50, c=COLOR)
-        ax[idx].hlines(
+        xpos = ax.get_xlim()
+        xpos = sum(xpos) / len(xpos)
+
+        ax.scatter(p["median"], ypos, s=50, c=COLOR)
+        ax.hlines(
             [ypos],
             [p["lower"]],
             [p["upper"]],
             linewidths=[5 / 2],
             colors=[COLOR],
         )
-        label = f"{p['median']:.2f} [{p['lower']:.2f}, {p['median']:.2f}]\n$p(ROPE)$ = {p['p_rope']:.2%}"
-        # ax[idx].text(p["median"], ypos * 1.05, label, fontsize=9, ha="center")
-        ax[idx].set_ylim(0, ypos * 1.2)
-        ax[idx].set_yticks([])
-        ax[idx].set_title(f"$\\{p['param']}$: {label}")
+        label = f"{p['median']:.3f} [{p['lower']:.3f}, {p['upper']:.3f}]"
+        ax.set_ylim(0, ypos * 1.2)
+        ax.set_yticks([])
+        ax.set_title(f"SSP-following $-$ SSP-violating ($\\{p['param']}$)\n")
+        ax.text(xpos, ypos * 1.25, label, ha="center", fontsize=8)
 
     fig.suptitle(f"Frequencies: {which.upper()}")
-    fig.set_size_inches(8, 3)
+    fig.set_size_inches(4, 4)
 
-    if file:
-        fig.savefig(file, dpi=800)
+    fn = Path("img") / f"freq-params-{which}.png"
+    fig.savefig(fn, dpi=800)
 
 
 def plot_freq(which: str = "subtlex"):
@@ -237,11 +263,76 @@ def plot_freq(which: str = "subtlex"):
         pass
 
 
+def table_examples():
+    langs = pl.read_parquet(utils.OUT_PATH / "languages.parquet")
+    s = pl.read_parquet(utils.OUT_PATH / "syllables.parquet")
+    w = pl.read_parquet(utils.OUT_PATH / "words.parquet")
+    n_words = w.group_by("iso639p3code").len("n_words")
+
+    s = s.join(langs, on=list(set(langs.columns).intersection(s.columns))).join(
+        n_words, on="iso639p3code", how="left"
+    )
+    examples = s.filter(pl.col("syll").str.len_chars() > 2).partition_by("is_ssp")
+
+    df = []
+    for d in examples:
+        df.append(d.unique(["iso639p3code"]).sample(5))
+
+    df = (
+        pl.concat(df)
+        .sort("iso639p3code")
+        .with_columns(
+            pl.col("is_ssp").replace_strict(
+                {True: "SSP-following", False: "SSP-violating"}
+            ),
+            pl.col("sonority"),
+        )
+    )
+
+    wlist = []
+    for r in df.iter_rows(named=True):
+        d = w.filter(
+            pl.col("syll").list.contains(r["syll"]),
+            pl.col("iso639p3code") == r["iso639p3code"],
+        ).select(["iso639p3code", "phon", "word"])
+        d = d.sample(1)
+        d.insert_column(-1, pl.Series("syll", [r["syll"]]))
+        d.insert_column(-1, pl.Series("sonority_2", [r["sonority"]]))
+
+        wlist.append(d)
+    wlist = pl.concat(wlist)
+
+    df = (
+        df.join(wlist, on=["iso639p3code", "syll"])
+        .with_columns(
+            pl.col("sonority_2").list.join(" "),
+            pl.col("sonority").list.join("-"),
+            phon=pl.col("word") + pl.lit(" /") + pl.col("phon") + pl.lit("/"),
+            syll=pl.lit(" /") + pl.col("syll") + pl.lit("/"),
+        )
+        .sort("is_ssp")
+        .select(["is_ssp", "lang", "syll", "phon", "sonority", "sonority_2"])
+    )
+    (
+        GT(df, groupname_col="is_ssp")
+        .cols_label(
+            lang="Language",
+            syll="Syllable",
+            phon="Original word",
+            sonority="Sonority index",
+            sonority_2="",
+        )
+        .fmt_nanoplot(columns="sonority_2")
+    ).gtsave(Path("img/examples.png"), zoom=10)
+
+
 def main():
-    plot_ssp_params()
-    plot_ssp_langs()
-    plot_freq_params(which="subtlex")
-    plot_freq_params(which="childes")
+    table_examples()
+    # plot_ssp_params()
+    # plot_ssp_langs()
+    # plot_freq_distribution()
+    # plot_freq_params(which="subtlex")
+    # plot_freq_params(which="childes")
 
 
 if __name__ == "__main__":

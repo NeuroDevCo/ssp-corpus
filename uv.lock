@@ -529,6 +529,18 @@ wheels = [
 ]
 
 [[package]]
+name = "click"
+version = "8.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/76/d4/81420972a676e8ffea40450d8c8c92943e7218a78fe9b64359836cc9876b/click-8.4.2.tar.gz", hash = "sha256:9a6cea6e60b17ebe0a44c5cc636d94f09bd66142c1cd7d8b4cd731c4917a15f6", size = 338000, upload-time = "2026-06-24T17:45:15.148Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/e2/79c688af8b210d232694e31e59da9f6ec747bae31c3f5946e4e9b98860d5/click-8.4.2-py3-none-any.whl", hash = "sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76", size = 119243, upload-time = "2026-06-24T17:45:13.73Z" },
+]
+
+[[package]]
 name = "clldutils"
 version = "3.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -608,15 +620,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4c/13/7d740c5849255756bc17888787313b61fd38a0a8304fc4f073dfc46122aa/comm-0.2.3.tar.gz", hash = "sha256:2dc8048c10962d55d7ad693be1e7045d891b7ce8d999c97963a5e3e99c055971", size = 6319, upload-time = "2025-07-25T14:02:04.452Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/60/97/891a0971e1e4a8c5d2b20bbe0e524dc04548d2307fee33cdeba148fd4fc7/comm-0.2.3-py3-none-any.whl", hash = "sha256:c615d91d75f7f04f095b30d1c1711babd43bdc6419c1be9886a85f2f4e489417", size = 7294, upload-time = "2025-07-25T14:02:02.896Z" },
-]
-
-[[package]]
-name = "commonmark"
-version = "0.9.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/60/48/a60f593447e8f0894ebb7f6e6c1f25dafc5e89c5879fdc9360ae93ff83f0/commonmark-0.9.1.tar.gz", hash = "sha256:452f9dc859be7f06631ddcb328b6919c67984aca654e5fefb3914d54691aed60", size = 95764, upload-time = "2019-10-04T15:37:39.817Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b1/92/dfd892312d822f36c55366118b95d914e5f16de11044a27cf10a7d71bbbf/commonmark-0.9.1-py2.py3-none-any.whl", hash = "sha256:da2f38c92590f83de410ba1a3cbceafbc74fee9def35f9251ba9a971d6d66fd9", size = 51068, upload-time = "2019-10-04T15:37:37.674Z" },
 ]
 
 [[package]]
@@ -996,20 +999,21 @@ wheels = [
 
 [[package]]
 name = "great-tables"
-version = "0.21.0"
+version = "0.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "babel" },
-    { name = "commonmark" },
     { name = "faicons" },
     { name = "htmltools" },
     { name = "importlib-metadata" },
     { name = "importlib-resources" },
+    { name = "multimark" },
+    { name = "nokap" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4a/62/2f323fa5d907a741ad84db4cb4e9f8eb56fa2149a4f571e761951390d2cb/great_tables-0.21.0.tar.gz", hash = "sha256:40869cf972ea679710a0985c54c28e6787435e9b26ca295a8848ca5fbc02259a", size = 13002962, upload-time = "2026-03-03T20:25:28.93Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fc/be/3e35429e915bc355cc69f522d79ccc122858ae038738ca3dcd8a7d51c854/great_tables-0.22.0.tar.gz", hash = "sha256:ccf031d90cab599328232bc32afadef215da1457dbc025d0972048cc2050fd57", size = 26110797, upload-time = "2026-06-12T01:07:28.678Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/24/cd32cb847edfa9b658bcb4647b3f4247c09ef7dc1f4f2cba5a620d266865/great_tables-0.21.0-py3-none-any.whl", hash = "sha256:d2f300f44cffb47d59e4dd4038d115633806b20275d39616e26f137627818b6b", size = 1405818, upload-time = "2026-03-03T20:25:27.21Z" },
+    { url = "https://files.pythonhosted.org/packages/85/46/0fd6ca17e3b40b657af79aaf50e2e54f736f4ad5585e201da702c52c7c2a/great_tables-0.22.0-py3-none-any.whl", hash = "sha256:7a7f81c2d1eb66d88166e864ac820966c23f04e4ecb41eeca8f9df1e1b21764d", size = 1455612, upload-time = "2026-06-12T01:07:26.815Z" },
 ]
 
 [[package]]
@@ -1075,15 +1079,15 @@ wheels = [
 
 [[package]]
 name = "htmltools"
-version = "0.6.0"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cd/1d/c568d17e9fb5ad5aa0ca3531c58d36fe69deb8eee4e53ff6425c1f99f210/htmltools-0.6.0.tar.gz", hash = "sha256:e8a3fb023d748935035db7ff17f620612ffc814a6a80b6ae388f7b7ab182adf7", size = 97152, upload-time = "2024-10-29T20:21:43.378Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a4/54/e1a0ea0b8db8460fdedf584b4136a5b9e7f9d7072ee008f825f29b103660/htmltools-0.7.0.tar.gz", hash = "sha256:b95f922b7038f1b935ce24691ae74cb1ab9526d9c9cf1c2e2f329c38ef227a10", size = 105807, upload-time = "2026-05-21T15:02:33.357Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/ba/aa99706246f1938ca905eb6eeb7db832ac2e157aa4b805acb5cd4cd1791a/htmltools-0.6.0-py3-none-any.whl", hash = "sha256:072a274ff5e2851e0acce13fc5bb2bbdbbad8268dc8b123f881c05012ce7dce0", size = 84954, upload-time = "2024-10-29T20:21:42.067Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/b2/bd9bfa6d77641bd3be57c7cd6ce10294d26db20cb9aedf19ac5d78845886/htmltools-0.7.0-py3-none-any.whl", hash = "sha256:92e5d06aeadb56e0ff63b236971bc58bb9cf6058c7235e3af57868e7bf113e1b", size = 89598, upload-time = "2026-05-21T15:02:32.171Z" },
 ]
 
 [[package]]
@@ -1137,11 +1141,11 @@ wheels = [
 
 [[package]]
 name = "importlib-resources"
-version = "6.5.2"
+version = "7.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/cf/8c/f834fbf984f691b4f7ff60f50b514cc3de5cc08abfc3295564dd89c5e2e7/importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c", size = 44693, upload-time = "2025-01-03T18:51:56.698Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/06/b56dfa750b44e86157093bc8fca0ab81dccbf5260510de4eaf1cb69b5b99/importlib_resources-7.1.0.tar.gz", hash = "sha256:0722d4c6212489c530f2a145a34c0a7a3b4721bc96a15fada5930e2a0b760708", size = 44985, upload-time = "2026-04-12T16:36:09.232Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a4/ed/1f1afb2e9e7f38a545d628f864d562a5ae64fe6f7a10e28ffb9b185b4e89/importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec", size = 37461, upload-time = "2025-01-03T18:51:54.306Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/db/55a262f3606bebcae07cc14095338471ad7c0bbcaa37707e6f0ee49725b7/importlib_resources-7.1.0-py3-none-any.whl", hash = "sha256:1bd7b48b4088eddb2cd16382150bb515af0bd2c70128194392725f82ad2c96a1", size = 37232, upload-time = "2026-04-12T16:36:08.219Z" },
 ]
 
 [[package]]
@@ -2239,6 +2243,28 @@ wheels = [
 ]
 
 [[package]]
+name = "multimark"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cffi" },
+    { name = "click" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c2/6a/9e3029b89074f2ce705dd1a94eaf1372a49ac63ac47712a0f2410c574add/multimark-0.2.0.tar.gz", hash = "sha256:15a53111c52e0a65c200b57a5068a618734af52fc5d6512e8b9884fadbb2b8b8", size = 436111, upload-time = "2026-06-09T20:48:52.833Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/ee/b016667bcdb49630c8536146084d2726393c3123844021d18f559ac60145/multimark-0.2.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:4be13eebff92579dfedda2d976e2d7cc6c4e1fd7d26c9b0a5a92de48f941146b", size = 132971, upload-time = "2026-06-09T20:48:38.477Z" },
+    { url = "https://files.pythonhosted.org/packages/8c/ed/be18fa30222de97e206e1e3d4e4bd425a3c21dfe22b5650a81e015548c80/multimark-0.2.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:77ce50f531536f97007e090895327552f1a4a9847129f34f5afb6d6f8e00bce7", size = 130481, upload-time = "2026-06-09T20:48:39.517Z" },
+    { url = "https://files.pythonhosted.org/packages/33/50/c5fbecf55ff3c05133d062653b22e63a14fa1a9bc890ac759d8826a48f36/multimark-0.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0f093afd5696e58207bbc10854005f9f0ef4e34874437d266e53ed1b819f2cff", size = 451011, upload-time = "2026-06-09T20:48:40.531Z" },
+    { url = "https://files.pythonhosted.org/packages/90/be/ae21b6d68eb6674086a60720c4d54367f4ef2ce963f33177f3710bdac9f6/multimark-0.2.0-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:4498fea15ca97c578982f349d2521cd45895409e9d000f285e410ff0b82915af", size = 452975, upload-time = "2026-06-09T20:48:41.615Z" },
+    { url = "https://files.pythonhosted.org/packages/28/85/0f361fa06cfaf62758fefef2d11141bbc58672a2c9d625674891b93fc23b/multimark-0.2.0-cp312-cp312-win_amd64.whl", hash = "sha256:ce9daae00ddc4f0f0cf07482d71b4f2bc95fac5aa81e8b3084252a8a23427dc3", size = 124934, upload-time = "2026-06-09T20:48:42.696Z" },
+    { url = "https://files.pythonhosted.org/packages/36/75/0759e525cd4b53eeaa6b53b819d630fd2b1c5b73e6561e6b83a16a3ea4fc/multimark-0.2.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:390941f897850a4347d61fb4d8890810adc0c964a7d4565fc77c4cf30c0b5ea0", size = 132975, upload-time = "2026-06-09T20:48:43.567Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/f7/33f0c8b6814b2e034956df0bdb971fb64d88277fd1ddbf71ea5e135823f7/multimark-0.2.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:1a8527fe99aa56089228fe132540398c908e179a2a2259f4da006d5f6aab7217", size = 130476, upload-time = "2026-06-09T20:48:44.49Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/08/e6b1816b4ca68bf20a72f4784d924b12fe96083c0edbd4dc2e52e1795920/multimark-0.2.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5b0bb3060b3a4b050bd1c6c75bbcbc8d0e705a70af73d3269c9637a2f4e08123", size = 450977, upload-time = "2026-06-09T20:48:45.341Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/4b/a5acdb28bc9e8ee638d8af74938780188efd5ae0102928ee33cd508cba72/multimark-0.2.0-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:9b5542fee4d73498e3bc1055375a1370d6ca72916804a7c8484fa4409fd635b6", size = 452983, upload-time = "2026-06-09T20:48:46.322Z" },
+    { url = "https://files.pythonhosted.org/packages/7f/65/8c550c71d1dc79ba04de57177a11e809b8a27ac4e56726ec487dccd68c95/multimark-0.2.0-cp313-cp313-win_amd64.whl", hash = "sha256:c3ff54935aa0724390955c12a91d85d4e04664c2c8da147714226a4ac905b387", size = 124938, upload-time = "2026-06-09T20:48:47.507Z" },
+]
+
+[[package]]
 name = "multipledispatch"
 version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2372,6 +2398,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/75/71/6adc60734e7366b5c45332a21193020acc89a4f4391f037e1fc7d368917f/newick-1.11.0.tar.gz", hash = "sha256:b8bf81f88dbc0e1cb85928e6f4c7e0e29062c3739e27216aae76c3065a297186", size = 25426, upload-time = "2026-01-14T11:19:53.065Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/35/3f/66348a0ff595970ad226d7d5b1583d94486ea64e9e12c434f5d1dd3b3606/newick-1.11.0-py2.py3-none-any.whl", hash = "sha256:c431976e33ea9166d6bf87394408086ce616930a5a434a30883220dee547d6eb", size = 15782, upload-time = "2026-01-14T11:19:51.454Z" },
+]
+
+[[package]]
+name = "nokap"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "websockets" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b9/f7/a4f3d6f89773df40884bc10790977c80a9ea17ad526ea0b0cd35a703595c/nokap-0.1.0.tar.gz", hash = "sha256:63071cf5e7c4f0487532f6281c6ea85d90673d5cd835ffe5e64c913989742eb9", size = 77047, upload-time = "2026-06-08T23:19:17.959Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/dc/c35af5ccf8dbf3268750c54a3c0830f486b8faec38c811aff92335aa99ba/nokap-0.1.0-py3-none-any.whl", hash = "sha256:36f2cae8d4251945dbe311ef68916c7eddfe51da490aabe0d68c5d13294b2539", size = 36233, upload-time = "2026-06-08T23:19:16.725Z" },
 ]
 
 [[package]]
@@ -3296,6 +3335,22 @@ wheels = [
 ]
 
 [[package]]
+name = "quarto"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "ipykernel" },
+    { name = "jupyter-core" },
+    { name = "nbclient" },
+    { name = "nbformat" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/a4/33dc28f6fcd5ff80ee80b2afddea9bc46a42f5e2bbc000eeb1b5f6194918/quarto-0.1.0.tar.gz", hash = "sha256:d9a4978110204f5b9d3af39faa9e195083efcbac8f6a23789e29cb27c72ded15", size = 2920, upload-time = "2021-02-03T21:53:12.381Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7d/14/8af79508df038ab05953ecf862420c7f4cc131b1682f0c80cb4f78c58593/quarto-0.1.0-py3-none-any.whl", hash = "sha256:8138fc9d1bee6269a5436837baedc699a262be1478f96444d6f99029f1a114f0", size = 10319, upload-time = "2021-02-03T21:53:10.812Z" },
+]
+
+[[package]]
 name = "rapidfuzz"
 version = "3.14.5"
 source = { registry = "https://pypi.org/simple" }
@@ -3979,6 +4034,7 @@ dependencies = [
     { name = "pygraphviz" },
     { name = "pytest" },
     { name = "python-iso639" },
+    { name = "quarto" },
     { name = "rich" },
     { name = "scipy" },
     { name = "seaborn" },
@@ -3999,7 +4055,7 @@ requires-dist = [
     { name = "basemap", specifier = "==2.0.0" },
     { name = "childespy", specifier = ">=1.0.1" },
     { name = "cmdstanpy", specifier = ">=1.3.0" },
-    { name = "great-tables", specifier = ">=0.21.0" },
+    { name = "great-tables", specifier = ">=0.22.0" },
     { name = "h5netcdf", specifier = ">=1.8.1" },
     { name = "ipyleaflet", specifier = ">=0.20.0" },
     { name = "itables", specifier = ">=2.8.1" },
@@ -4018,6 +4074,7 @@ requires-dist = [
     { name = "pygraphviz", specifier = ">=1.14" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "python-iso639", specifier = ">=2026.1.31" },
+    { name = "quarto", specifier = ">=0.1.0" },
     { name = "rich", specifier = ">=14.3.3" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
@@ -4519,9 +4576,9 @@ wheels = [
 
 [[package]]
 name = "zipp"
-version = "3.23.0"
+version = "4.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e3/02/0f2892c661036d50ede074e376733dca2ae7c6eb617489437771209d4180/zipp-3.23.0.tar.gz", hash = "sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166", size = 25547, upload-time = "2025-06-08T17:06:39.4Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/d8/eab98a517c14134c0b2eb4e2387bc5f457334293ec5d2dd3857ec2966802/zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602", size = 26214, upload-time = "2026-05-18T20:08:57.967Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl", hash = "sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e", size = 10276, upload-time = "2025-06-08T17:06:38.034Z" },
+    { url = "https://files.pythonhosted.org/packages/3a/13/547360d81e6d88d58492968ffda9f9542854f11310ee556fef14260cc886/zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f", size = 10238, upload-time = "2026-05-18T20:08:57.045Z" },
 ]

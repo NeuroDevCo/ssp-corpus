@@ -188,5 +188,7 @@ model/**/*.txt
 model
 
 
-out/*.parquet
-out/childes-freqs/
+/out/*.parquet
+/out/childes-freqs/
+/docs/index_files/
+/docs/dashboard_files/

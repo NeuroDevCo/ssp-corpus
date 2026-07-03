@@ -16,10 +16,10 @@ model: sync
 viz: sync
 	uv run main.py -v
 
-viz: sync
+docs: sync
 	uv run main.py -d
 
 all:
-	uv run main.py -l -w -s -m -v
+	uv run main.py -l -w -s -m -v -d
 
 

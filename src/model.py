@@ -137,26 +137,6 @@ def hdi(x, prob: float = 0.95):
     return hdi_interval
 
 
-def interval_overlap(a: tuple, b: tuple):
-    """Calculate the proportion of overlap between two continuous intervals.
-
-    Args:
-        a (tuple): First interval.
-        b (tuple): Second interval.
-
-    Returns:
-        float: Proportion of overlap between the two intervals. Returns 0 if there is no overlap or if either interval has zero length.
-    """
-    a1, a2 = np.sort(a)
-    b1, b2 = np.sort(b)
-
-    overlap = max(0, min(a2, b2) - max(a1, b1))
-
-    union = max(a2, b2) - min(a1, b1)
-
-    return overlap / union if union > 0 else 0.0
-
-
 def main():
 
     # fit SSP model
