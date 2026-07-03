@@ -146,4 +146,4 @@ def find_ssp_examples(
 if __name__ == "__main__":
     w = pl.read_parquet(Path("out/words.parquet"))
     s = pl.read_parquet(Path("out/syllables.parquet"))
-    e = find_ssp_examples(w, s, iso639p3code=["tha"])
+    e = find_ssp_examples(w, s, iso639p3code=["tha", "fin", "eng"])

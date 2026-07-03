@@ -811,6 +811,22 @@ wheels = [
 ]
 
 [[package]]
+name = "epitran"
+version = "1.35.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jamo" },
+    { name = "marisa-trie" },
+    { name = "panphon" },
+    { name = "regex" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/49/2c/22effafa0be43490d6424c550b3b641795102f5a9ecb868de0b0fef215dd/epitran-1.35.2.tar.gz", hash = "sha256:14dfa6265ac51ca8972d00704712a01dcb10275e122e407da23dcec74669f0e1", size = 165808, upload-time = "2026-06-18T20:11:47.719Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/a8/37e70ed73d885baedc36391d76350b3d9dbaa823b5996279fa4a384dda8f/epitran-1.35.2-py3-none-any.whl", hash = "sha256:b5b52c35602a4982009a68b3b9bb850c61e72636e8a3c7ba5a6f9438e060fe8a", size = 222057, upload-time = "2026-06-18T20:11:46.316Z" },
+]
+
+[[package]]
 name = "etuples"
 version = "0.3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -1280,6 +1296,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b4/0d/e4a935862ee77e06062c6b797357c7aaf9d4ba9a32d6eb129018d0d19be4/itables-2.8.1.tar.gz", hash = "sha256:562c7d716d667f3faf87ffe1044a19747a3b231ee6aa7725eb6f908caa18c429", size = 1526821, upload-time = "2026-06-10T22:28:07.66Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ad/22/eb6ae7468ba673fcb891ff3142e13ffa18f6a43183e6dd8f224b2b4321d3/itables-2.8.1-py3-none-any.whl", hash = "sha256:262e3908771af90634546fe4a5ed63e0d442a6957efbcdcd2ae5cad4845b76e3", size = 1551238, upload-time = "2026-06-10T22:28:05.09Z" },
+]
+
+[[package]]
+name = "jamo"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b1/a2/bda770579809726e929ca6356743f9f50f64a2cbaee578fa9d4824afb00e/jamo-0.4.1.tar.gz", hash = "sha256:ea65cf9d35338d0e0af48d75ff426d8a369b0ebde6f07051c3ac37256f56d025", size = 7386, upload-time = "2017-11-06T19:28:51.729Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ac/cc/49812faae67f9a24be6ddaf58a2cf7e8c3cbfcf5b762d9414f7103d2ea2c/jamo-0.4.1-py3-none-any.whl", hash = "sha256:d4b94fd23324c606ed2fbc4037c603e2c3a7ae9390c05d3473aea1ccb6b1c3fb", size = 9543, upload-time = "2017-11-06T19:28:49.624Z" },
 ]
 
 [[package]]
@@ -4015,6 +4040,7 @@ dependencies = [
     { name = "basemap" },
     { name = "childespy" },
     { name = "cmdstanpy" },
+    { name = "epitran" },
     { name = "great-tables" },
     { name = "h5netcdf" },
     { name = "ipyleaflet" },
@@ -4038,6 +4064,7 @@ dependencies = [
     { name = "rich" },
     { name = "scipy" },
     { name = "seaborn" },
+    { name = "setuptools" },
     { name = "ty" },
     { name = "wikipron" },
     { name = "wordfreq", extra = ["cjk"] },
@@ -4055,6 +4082,7 @@ requires-dist = [
     { name = "basemap", specifier = "==2.0.0" },
     { name = "childespy", specifier = ">=1.0.1" },
     { name = "cmdstanpy", specifier = ">=1.3.0" },
+    { name = "epitran", specifier = ">=1.35.2" },
     { name = "great-tables", specifier = ">=0.22.0" },
     { name = "h5netcdf", specifier = ">=1.8.1" },
     { name = "ipyleaflet", specifier = ">=0.20.0" },
@@ -4078,6 +4106,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.3.3" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "setuptools", specifier = ">=82.0.1" },
     { name = "ty", specifier = ">=0.0.29" },
     { name = "wikipron", specifier = ">=1.3.3" },
     { name = "wordfreq", extras = ["cjk"], specifier = ">=3.1.1" },

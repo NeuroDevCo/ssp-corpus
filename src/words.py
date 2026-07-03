@@ -1,6 +1,7 @@
 from pathlib import Path
 from tempfile import tempdir
 
+
 import polars as pl
 from rich.progress import track
 from wordfreq import zipf_frequency

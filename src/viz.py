@@ -328,11 +328,11 @@ def table_examples():
 
 def main():
     table_examples()
-    # plot_ssp_params()
-    # plot_ssp_langs()
-    # plot_freq_distribution()
-    # plot_freq_params(which="subtlex")
-    # plot_freq_params(which="childes")
+    plot_ssp_params()
+    plot_ssp_langs()
+    plot_freq_distribution()
+    plot_freq_params(which="subtlex")
+    plot_freq_params(which="childes")
 
 
 if __name__ == "__main__":
