@@ -1,13 +1,16 @@
 ```{python}
 #| label: setup
+from importlib.metadata import version
 from pathlib import Path
 import sys
-import iso639
 
-from great_tables import GT, md, html, from_column, style, loc
+from cmdstanpy import cmdstan_version
+from great_tables import GT, md, html, from_column, style, loc, vals
+import iso639
 from matplotlib import pyplot as plt
 import numpy as np
 import polars as pl
+import polars.selectors as cs
 import xarray as xr
 
 from src import languages, scraping, utils, viz
@@ -20,11 +23,17 @@ sf = pl.read_parquet(utils.OUT_PATH / "syllables_freq.parquet")
 f = pl.read_parquet(utils.OUT_PATH / "frequencies.parquet")
 p_ssp = pl.read_parquet(utils.OUT_PATH / "posterior_ssp.parquet")
 p_freq = pl.read_parquet(utils.OUT_PATH / "posterior_freq.parquet")
+
+w = w.join(langs, on=(set(langs.columns).intersection(w.columns)))
+n_words = w.group_by("iso639p3code").len("n_words")
+s = s.join(langs, on=(set(langs.columns).intersection(s.columns))).join(
+    n_words, on="iso639p3code", how="left"
+)
 ```
 
 # Introduction
 
-Speech is made of hierarchically organised, discrete linguistic units (e.g., phonemes, syllables, words, phrases). Syllables are a privileged linguistic unit in speech processing, particularly during early language acquisition: newborns preferentially chunk the speech signal into syllable-sized units [@bijeljac-babic1993how; @flo2019newborns]. This is remarkable, given they have accumulated a relatively limited linguistic experience. The mechanisms underlying syllable identification are still unclear.
+Speech is made of hierarchically organised, discrete linguistic units (e.g., phonemes, syllables, words, phrases). During early language acquisition, syllables are a privileged linguistic unit in speech processing: newborns preferentially chunk the speech signal into syllable-sized units [@bijeljac-babic1993how; @flo2019newborns]. This is remarkable, given they have accumulated a relatively limited linguistic experience. The mechanisms underlying syllable identification are still unclear.
 
 There is some evidence that, at birth, humans are sensitivity to certain constraints to syllabic structure. One of them is the Sonority Sequencing Principle (SSP). The SSP constrains the order of the segments inside a syllable based on sonority, a phonological feature that describes the perceptual loudness of a segment relative to neighbouring segments. The SSP states that each syllable displays a unique peak of sonority in the nucleus, and that sonority rises unidirectionally from the syllable margins toward the nucleus [@parker2008sounda].
 
@@ -38,7 +47,7 @@ The SSP has been long claimed to be a linguistic universal, on the grounds of SS
 
 The universality of the SSP would place this principle as one of the few cues for speech segmentation present from birth to *all* humans, before language-specific constraints to sound sequences (e.g., phonotactics) are available. The universal status of the SSP is however a matter of debate, as violations of the SSP are common across languages [@yin2023frequent]. For instance, the /st-, -ts/ consonant clusters violate the SSP when at syllabic onset or at coda (e.g., *street*, *ticks*), respectively. This is the case across many languages [@kawasaki1997alternatives]. Some languages, like Russian, are known for allowing fairly complex consonant clusters at syllabic onset that violate the SSP (e.g., взгляд (*vzglyad* [glance]) [@halle1971sound; @ito1982syllable].
 
-More recent accounts of linguistic universals [e.g., Optimality Theory, @prince2004optimalitya] propose a softer understanding of the term "universal", such that linguistic universals represent overall preferences toward certain linguistic structures across languages, instead of hard ON/OFF constraints. Under this account, the role of the SSP as a universally available cue for syllabification becomes a statistical question: how often do syllables in different languages abide by the SSP? In this line, @frisch2015preliminary estimates the relative frequency of SSP-following consonant clusters across languages 93 langugaes at around 70%, compared to SSP-violating clusters.
+More recent accounts of linguistic universals [e.g., Optimality Theory, @prince2004optimalitya] propose a softer understanding of the term "universal", such that linguistic universals represent overall preferences toward certain linguistic structures across languages, instead of hard ON/OFF constraints. Under this account, the role of the SSP as a universally available cue for syllabification becomes a statistical question: how often do syllables in different languages abide by the SSP? In this line, @frisch2015preliminary estimates the relative frequency of SSP-following consonant clusters across languages 93 languages at around 70%, compared to SSP-violating clusters.
 
 The aim of the present paper is to provide empirical estimates of the prevalence of the SSP in a fairly representative sample of languages. We pursued this goal in two ways. In a first analysis, we estimated the proportion of the syllabic repertoire of each language that followed SSP. Because items inside the syllabic repertoire of a language likely occur at different rates in speech (e.g., both /ka/ and /gla/ syllables are attested in Spanish, but the former appears in a larger number of words), a second analysis investigated whether SSP-following syllables are also more frequent speech compared to SSP-violating syllables. We explored this research question in two datasets. In the first dataset, syllabic frequencies were derived from available databases of lexical frequencies that did not discriminate between adult-directed speech (ADS) and child-directed speech (CDS). In the second dataset, syllabic frecuencies were derived from lexical frequencies in the CHILDES [@macwhinney1990child], which includes corpora of child-directed speech.
 
@@ -48,30 +57,75 @@ The aim of the present paper is to provide empirical estimates of the prevalence
 
 ### Data collection
 
-We scraped word entries with phonological transcriptions from [Wiktionary](https://www.wiktionary.org/). Wiktionary is an open-source, free database of lexical entries. As of June 10th 2026, Wiktionary contains 10,050,751 lexical entries from 8,244 langages contributed by 4,463,976 total users. Some lexical entries in Wiktionary also include a phonological in IPA format or phonetic transcription of the word-form in a particular language. We used the `wikipron` Python package [@lee2020massively] to scrape all available phonological transcriptions from all `{python} len(langs)` languages included in the Glottolog database [@nordhoff2011glottolog]. Using the `lingtypology` Python package [@voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). This resulted in ~1.7 million pronunciations belonging to 900 languages. We filtered out languages with less than 100 phonological transcriptions available. The final dataset containing word-form phonological transcriptions included `{python} f"{len(w):,.0f}"` word-forms from `{python} f"{len(w.unique("iso639p3code")):,.0f}"` languages.
+We scraped word entries with phonological transcriptions from [Wiktionary](https://www.wiktionary.org/). Wiktionary is an open-source, free database of lexical entries. As of June 10th 2026, Wiktionary contains 10,050,751 lexical entries from 8,244 langages contributed by 4,463,976 total users. Some lexical entries in Wiktionary also include a phonological in IPA format or phonetic transcription of the word-form in a particular language. We used the `wikipron` Python package [version `{python} version("wikipron")`, @lee2020massively] to scrape all available phonological transcriptions from all `{python} len(langs)` languages included in the Glottolog database [@nordhoff2011glottolog]. Using the `lingtypology` Python package [version `{python} version("wikipron")`,  @voronov2019lingtypology; @moroz2017lingtypology], we extracted their corresponding ISO-639-3 code and accompanying information (e.g., language family, official name). This resulted in ~1.7 million pronunciations belonging to 900 languages. We filtered out languages with less than 100 phonological transcriptions available. The final dataset containing word-form phonological transcriptions included `{python} f"{len(w):,.0f}"` word-forms from `{python} f"{len(w.unique("iso639p3code")):,.0f}"` languages.
 
 ### Data processing
 
-We segmented word-form phonological transcriptions into syllabic candidates where possible. If available, we used explicit syllable boundary markers (`.`) or implicity syllable markers (`ˈ` for primary stress, `ˌ` for secondary stress). In the absence of syllabic markers, we assumed the word to be monosyllabic. We then classified the segments inside each resulting syllable candidate into consonants (`C`), vowels (`V`), and semi-vowels (`v`). Consecutive sequencies of vowels and semi-vowels (e.g., `V`, `VV`, `Vv`, `VVv`) where classified as vocalic clusters. Syllables with more than one vocalic cluster were flagged as multisyllabic, and were excluded from the dataset. We also remove duplicated syllables within each language (e.g., if the syllable /ka/ appeared in Spanish words /ka.sa/ and /kaˈpo/ in Spanish, it would appear more than once in the Spanish dataset), resulting in a syllabic repertoire for each language. We then assigned a sonority score to each segment in each syllable in a scale from 1 to 9, according to the `panphon` Python package [@mortensen2016panphon]. Finally, we evaluated whether each syllable followed or violated the SSP. Syllables with more than one peak (i.e., local minimum) in the sonority sequence were classified as SSP-violating, and as SSP-following otherwise. Syllables with a flat sonority contour were classifid as SSP-following.
+We segmented word-form phonological transcriptions into syllabic candidates where possible. If available, we used explicit syllable boundary markers (`.`) or implicity syllable markers (`ˈ` for primary stress, `ˌ` for secondary stress). In the absence of syllabic markers, we assumed the word to be monosyllabic. We then classified the segments inside each resulting syllable candidate into consonants (`C`), vowels (`V`), and semi-vowels (`v`). Consecutive sequencies of vowels and semi-vowels (e.g., `V`, `VV`, `Vv`, `VVv`) where classified as vocalic clusters. Syllables with more than one vocalic cluster were flagged as multisyllabic, and were excluded from the dataset. We also remove duplicated syllables within each language (e.g., if the syllable /ka/ appeared in Spanish words /ka.sa/ and /kaˈpo/ in Spanish, it would appear more than once in the Spanish dataset), resulting in a syllabic repertoire for each language. We then assigned a sonority score to each segment in each syllable in a scale from 1 to 9, according to the `panphon` Python package [version `{python} version("panphon")` @mortensen2016panphon]. Finally, we evaluated whether each syllable followed or violated the SSP. Syllables with more than one peak (i.e., local minimum) in the sonority sequence were classified as SSP-violating, and as SSP-following otherwise. Syllables with a flat sonority contour were classifid as SSP-following.
 
 ```{python}
-w = w.join(langs, on=(set(langs.columns).intersection(w.columns)))
-n_words = w.group_by("iso639p3code").len("n_words")
-s = s.join(langs, on=(set(langs.columns).intersection(s.columns))).join(
-    n_words, on="iso639p3code", how="left"
+#| label: tbl-freq-examplesllustractive example of syllabic frequency calculation for syllables /ka/ and /ne/ across French and Spanish.
+example_langs = ["fra", "spa"]
+example_syllables = ["ka", "ne"]
+ex_s = s.filter(
+    pl.col("syll").is_in(example_syllables), pl.col("iso639p3code").is_in(example_langs)
+)
+tbl = (
+    w.filter(
+        pl.col("iso639p3code").is_in(example_langs),
+        pl.col("syll").list.set_intersection(example_syllables).list.len() != 0,
+        pl.col("freq_subtlex_pmw").is_not_null(),
+        pl.col("freq_childes_pmw").is_not_null(),
+    )
+    .explode("syll")
+    .filter(pl.col("syll").is_in(example_syllables))
+    .join(ex_s, on=["lang", "syll"])
+    .with_columns(
+        word="/" + pl.col("phon") + "/",
+        syll="Syllable /" + pl.col("syll") + "/",
+    )
+    .group_by(["lang", "syll"])
+    .map_groups(lambda x: x.sample(5))
+    .sort(["syll", "lang", "freq_subtlex_pmw"], descending=[False, False, True])
+    .with_columns(index=pl.row_index().over(["syll", "lang"]))
+    .select(["index", "lang", "syll", "word", "freq_subtlex_pmw", "freq_childes_pmw"])
+    .pivot(index=["index", "syll"], on=["lang"])
+    .rename(lambda x: x.lower())
+    .drop("index")
+)
+
+(
+    GT(tbl, groupname_col="syll", auto_align=True)
+    .tab_spanner("French", cs.ends_with("_french"))
+    .tab_spanner("Spanish", cs.ends_with("_spanish"))
+    .summary_rows(
+        fns={
+            "PMW": cs.starts_with("freq").sum(),
+            "Zipf": cs.starts_with("freq").sum().log(10) + 3,
+        },
+        missing_text="",
+        fmt=vals.fmt_number,
+    )
+    .fmt_number(cs.numeric())
+    .cols_label(
+        word_french="Word",
+        word_spanish="Word",
+        freq_subtlex_pmw_french="Generic",
+        freq_subtlex_pmw_spanish="Generic",
+        freq_childes_pmw_french="CHILDES",
+        freq_childes_pmw_spanish="CHILDES",
+    )
+    .sub_missing(cs.all(), "")
 )
 ```
-
-We then used the `wikipron` Python package [@lee2020massively] to scrape the Wiktionary page of each language looking for pronunciations. First, narrow phonological transcriptions were searched. If no narrow phonological transcriptions are available, broad phonological transcriptions were searched. Finally, if no broad phonological transcriptions are available either, the language was skipped. We then filtered our languages with less than 100 available pronunciations. This resulted in `{python} len(langs)` languages with at least 100 pronunciations available in Wiktionary.
-
 
 ![Examples of SSP-following and SSP-violating syllables in the dataset. Sonority index contours are shown for each syllable numerically and graphically.](/img/examples.png){#tbl-examples}
 
 ### Data analysis
 
-To model the prevalence of the SSP across languages, we aggregated, for each language in the dataset, the number of syllables that followed the SSP. This resulted in one data point per language. We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. This model estimated the average probability of the syllables of language family following the SSP. This model included each family language as a group with a random intercept. @eq-model-ssp shows a detailed implementation of both models model. We implemented the model in the probabilistic programming language Stan [@carpenter2017stan] and CmdStanPy, its interface to its Python (3.12.7). We run eight Hamiltonian Monte Carlo chain of 2,000 iterations each (1,000 were warm-up iterations) to estimate the posterior distribution of the model.
+To model the prevalence of the SSP across languages, we aggregated, for each language in the dataset, the number of syllables that followed the SSP. This resulted in one data point per language. We used a multilevel, Bayesian logistic regression model to estimate the proportion of syllables that followed or violated the SSP across languages. This model estimated the average probability of the syllables of language family following the SSP. This model included each family language as a group with a random intercept. @eq-model-ssp shows a detailed implementation of both models model. We implemented the model in the probabilistic programming language Stan [version `{python} ".".join([str(a) for a in cmdstan_version()])`, @carpenter2017stan] and CmdStanPy, its interface to its Python 3.12.7. We run eight Hamiltonian Monte Carlo chain of 2,000 iterations each (1,000 of which were warm-up iterations) to estimate the posterior distribution of the model.
 
-Because we did not have access to the full syllabic repertoire of each language, available syllables from languages are the result of convenience sampling (e.g., in Wiktionary word entries are created by volunteers). The number of entries from each language, the amount of detail with which they are entered, and the type of words that are entered, varies systematically across languages. This might bias the estimates. For instance, if SSP-violating syllables are less frequent than SSP-following syllables in the lexicon of a language, and less frequent words are less likely to enter Wiktionary by volunteers, then the observed prevalence o fSSP for that language likely overestimates the prevalence of SSP-following languages. For this reason, this model included a term in the linear model $\gamma / n_i$ aimed at capturing this potential overrepresentation of SSP-following syllables in datasets with fewer observations. 
+Because we did not have access to the full syllabic repertoire of each language, available syllables from languages are the result of convenience sampling (e.g., in Wiktionary word entries are created by volunteers). The number of entries from each language, the amount of detail with which they are entered, and the type of words that are entered, varies systematically across languages. This might bias the estimates. For instance, if SSP-violating syllables are less frequent than SSP-following syllables in the lexicon of a language, and less frequent words are less likely to enter Wiktionary by volunteers, then the observed prevalence o fSSP for that language likely overestimates the prevalence of SSP-following languages. For this reason, this model included a term in the linear model $\gamma / n_i$ aimed at capturing this potential overrepresentation of SSP-following syllables in datasets with fewer observations.
 
 
 $$
@@ -115,11 +169,6 @@ $$ {#eq-model-ssp}
 
 We extracted adult lexical frequencies for each word-form in the words dataset using the `wordfreq` Python package. We then performed the same steps as described above to expand the dataset into syllables, and evaluate if each of such syllables followed or violated the SSP. In addition, we computed a measure of syllabic frequency: for each syllable, we aggregated the lexical frequency of each word the syllable appeared in. The rationale behind this step is that each time a word is uttered, each of its syllables is also uttered. Therefore, by calculating the lexical frequency of each word a given syllable is involved in, an estimation of syllabic frequency can be derived.
 
-
-<!-- ![Distribution of the `{python} len(langs)` languages included in the final dataset. Black dots indicate the location assigned to each language by Glottolog. The color and size of the shaded circles indicate the language family and estimated population of speakers of each language, respectively. The size of the empty black circles indicate the number of pronunciations retrived from each language. Large divergencies between the size of the shaded and empty circles indicate the the language is over or under-represented in the dataset.](../img/map.png){#fig-map} -->
-
-<!-- For each language, and for each retrieved pronunciation, we chunked the phonological word-forms into syllable candidates by splitting the IPA transcription at syllabic boundaries, primary and secondary stress markers. The dataset of each language was then expanded to assign one row to each syllable candidate. Languages with less than 20 unique syllables were filtered out. We then used the `panphon` Python package [@mortensen2016panphon] to extract the features of each syllable candidate. First, we split the phonological form of the syllable candidate into phonological segments. Second, we classified each segment as consonant (C) or vowel (V). Glides were classified as vowels. Third, we counted the number of vocalic clusters (number of group of consecutive segments classified as vocalic) in each syllable candidate. If more than cluster was detected, the syllable candidate was considered to include more than one syllable and was filtered out. This was the case when the original phonological form of the word retrieved from Wiktionary did not include syllabic boundaries. Finally, we calculated the sonority contour of each syllable: using panphon, we extracted the sonority score of each segment (an integer ranging from 1 to 9). If the sonority contour had more than one local maximum, the syllable was classified as violating the Sonority Sequencing Principle (SSP). If the sonority contour had no peaks (flat) or had only one peak, the syllable was classified as following the SSP. -->
-
 ### Data analysis
 
 $$
@@ -153,10 +202,5 @@ Posterior distribution of main parameters in @eq-model-freq.
 :::
 
 # Appendix
-
-
-
-## Appendix
-
 
 # References
