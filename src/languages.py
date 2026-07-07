@@ -55,7 +55,7 @@ def get_glottolog() -> pl.DataFrame:
 
 
 def get_languages(
-    file: Path | str = utils.OUT_PATH / "languages.parquet",
+    file: Path | str = utils.RESULTS_PATH / "languages.parquet",
 ) -> pl.DataFrame:
     glottolog = get_glottolog()
 

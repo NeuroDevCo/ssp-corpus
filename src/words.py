@@ -161,13 +161,13 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
         langs.select("iso639p3code"), on="iso639p3code", how="left"
     )
 
-    words.write_parquet(utils.OUT_PATH / "words.parquet")
+    words.write_parquet(utils.RESULTS_PATH / "words.parquet")
 
     return words
 
 
 def main():
-    langs = pl.read_parquet(utils.OUT_PATH / "languages.parquet")
+    langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
     return get_words(langs)
 
 

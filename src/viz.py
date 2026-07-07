@@ -5,7 +5,6 @@ from pathlib import Path
 import polars as pl
 
 from great_tables import GT
-from great_tables._export import gtsave
 from matplotlib import pyplot as plt
 from matplotlib import colors, ticker
 import numpy as np
@@ -28,7 +27,7 @@ def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]
         dict: Language family and hex color pairs.
     """
     langs = (
-        pl.read_parquet(utils.OUT_PATH / "languages.parquet")
+        pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
         .unique("family_id")
         .select("family_id")
         .sort("family_id")
@@ -41,9 +40,9 @@ def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]
 
 
 def plot_ssp_langs():
-    s = pl.read_parquet(utils.OUT_PATH / "syllables.parquet")
+    s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
     langs = (
-        pl.read_parquet(utils.OUT_PATH / "languages.parquet")
+        pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
         .sort("family_id")
         .select(["iso639p3code", "family_id"])
     )
@@ -57,7 +56,8 @@ def plot_ssp_langs():
     )
 
     p = (
-        pl.read_parquet(utils.OUT_PATH / "posterior_ssp.parquet")
+        pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "ssp.parquet")
+        .with_columns(pl.col("param").str.replace_many(["theta_j[", "]"], ["", ""]))
         .join(data, left_on="param", right_on="iso639p3code", how="inner")
         .join(langs, left_on="param", right_on="iso639p3code", how="inner")
         .with_columns(
@@ -123,32 +123,103 @@ def plot_ssp_langs():
 
 
 def plot_freq_distribution():
-    sf = pl.read_parquet(utils.OUT_PATH / "syllables_freq.parquet")
+    sfs = pl.read_parquet(
+        utils.RESULTS_PATH / "syllables_freq_subtlex.parquet"
+    ).with_columns(source=pl.lit("Adults"))
+    sfc = pl.read_parquet(
+        utils.RESULTS_PATH / "syllables_freq_childes.parquet"
+    ).with_columns(source=pl.lit("CHILDES"))
+    sf = pl.concat([sfs, sfc])
 
-    fig, ax = plt.subplots(1, 2, sharex=True)
-    for idx, d in enumerate(sf.partition_by("is_ssp")):
-        ax[idx].hist(d["freq"], lw=2, edgecolor="white", bins=20, color="orange")
-        n = len(d)
-        title = "SSP-following" if all(ssp for ssp in d["is_ssp"]) else "SSP-violating"
-        title += f"\n($n$ = {n:,.0f})"
-        ax[idx].set_title(title)
-        ax[idx].xaxis.grid(True, color="lightgrey", linestyle=":")
+    fig, axes = plt.subplots(2, 2, sharex=True)
+    for widx, which in enumerate(set(sf["source"])):
+        dl = sf.filter(pl.col("source") == which)
+        for idx, d in enumerate(dl.partition_by("is_ssp")):
+            ax = axes[widx, idx]
+            ax.hist(d["freq"], lw=2, edgecolor="white", bins=20, color="orange")
+            n = len(d)
+            title = (
+                f"{which}: SSP-following"
+                if all(ssp for ssp in d["is_ssp"])
+                else f"{which}: SSP-violating"
+            )
+            title += f"\n($n$ = {n:,.0f})"
+            ax.set_title(title)
+            ax.xaxis.grid(True, color="lightgrey", linestyle=":")
 
-        ticks = ax[idx].get_yticks()
-        ax[idx].set_yticks(ticks)
-        labels = [f"{t:,.0f}" for t in ticks]
-        ax[idx].set_yticklabels(labels, ha="right", fontsize=5)
+            ticks = ax.get_yticks()
+            ax.set_yticks(ticks)
+            labels = [f"{t:,.0f}" for t in ticks]
+            ax.set_yticklabels(labels, ha="right", fontsize=5)
 
     fig.supxlabel("Syllabic frequency (Zipf)")
     fig.supylabel("$N$ of syllables")
     fig.tight_layout()
-    fig.set_size_inches(6, 3)
+    fig.set_size_inches(6, 5)
     fig.savefig(utils.IMG_PATH / "freq-distribution.png", dpi=800)
+
+
+def plot_ssp_bias():
+    s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
+
+    data = (
+        s.group_by(["iso639p3code"])
+        .agg(pl.col("is_ssp").mean(), n=pl.len().log())
+        .with_columns(
+            se=((pl.col("is_ssp") * (1 - pl.col("is_ssp"))) / pl.col("n")).sqrt()
+        )
+    )
+
+    fig, ax = plt.subplots(1, 1)
+    ax.scatter(data["n"], data["is_ssp"], color="orange", s=10)
+    dist_to_limit = data["is_ssp"] - 1
+    yerr_clipped = np.maximum(data["se"], dist_to_limit)
+    ax.errorbar(
+        data["n"],
+        data["is_ssp"],
+        yerr=yerr_clipped,
+        c="orange",
+        alpha=1 / 4,
+        linestyle="None",
+    )
+
+    coef = np.polyfit(data["n"].to_list(), data["is_ssp"].to_list(), 1)
+    fit = np.poly1d(coef)
+
+    ax.plot(data["n"], fit(data["n"]), lw=3, c=COLOR)
+    ax.set_xlabel("Log(Number of syllables)")
+    ax.set_ylabel("Proportion of SSP-following syllables")
+
+    _, ymax = ax.get_ylim()
+    ax.scatter(
+        data["n"],
+        [ymax + (ymax * 0.025)] * len(data),
+        marker="|",
+        c="orange",
+        alpha=0.5,
+    )
+
+    _, xmax = ax.get_xlim()
+    ax.scatter(
+        [xmax + (xmax * 0.025)] * len(data),
+        data["is_ssp"],
+        marker="_",
+        c="orange",
+        alpha=0.5,
+    )
+
+    ticks = np.linspace(0.5, 1, 6)
+    ax.set_yticks(ticks)
+    ax.set_yticklabels([f"{t:.0%}" for t in ticks])
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
+
+    fig.savefig(Path("img/ssp-bias.png"), dpi=800)
 
 
 def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
     params = ["theta", "gamma"]
-    s = pl.read_parquet(utils.MODEL_PATH / "ssp" / "ssp.parquet").select(params)
+    data_path = utils.RESULTS_PATH / "model-posterior" / "samples_ssp.parquet"
+    s = pl.read_parquet(data_path).select(params)
     post = (
         s.median()
         .transpose(header_name="param", include_header=True)
@@ -197,7 +268,7 @@ def plot_freq_params(which: str = "subtlex"):
 
     params = ["beta_1"]
     post = pl.read_parquet(
-        utils.MODEL_PATH / f"freq_{which}" / f"freq_{which}.parquet"
+        utils.RESULTS_PATH / "model-posterior" / f"samples_freq_{which}.parquet"
     ).select(params)
     out = (
         post.median()
@@ -233,6 +304,7 @@ def plot_freq_params(which: str = "subtlex"):
             linewidths=[5 / 2],
             colors=[COLOR],
         )
+        ax.axvline(0, linestyle="dotted", color="grey")
         label = f"{p['median']:.3f} [{p['lower']:.3f}, {p['upper']:.3f}]"
         ax.set_ylim(0, ypos * 1.2)
         ax.set_yticks([])
@@ -251,7 +323,7 @@ def plot_freq(which: str = "subtlex"):
         raise ValueError("which must be one of 'subtlex' or 'childes'")
 
     s = (
-        pl.read_parquet(utils.OUT_PATH / f"syllables_freq_{which}.parquet")
+        pl.read_parquet(utils.RESULTS_PATH / f"syllables_freq_{which}.parquet")
         .group_by(["is_ssp", "iso639p3code"])
         .agg(freq=pl.col("freq").drop_nans().mean())
     )
@@ -264,9 +336,9 @@ def plot_freq(which: str = "subtlex"):
 
 
 def table_examples():
-    langs = pl.read_parquet(utils.OUT_PATH / "languages.parquet")
-    s = pl.read_parquet(utils.OUT_PATH / "syllables.parquet")
-    w = pl.read_parquet(utils.OUT_PATH / "words.parquet")
+    langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
+    s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
+    w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
     n_words = w.group_by("iso639p3code").len("n_words")
 
     s = s.join(langs, on=list(set(langs.columns).intersection(s.columns))).join(

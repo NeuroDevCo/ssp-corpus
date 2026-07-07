@@ -228,13 +228,13 @@ def get_syllables(
         fn += f"_freq_{freq_which}"
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
-    syll.write_parquet((utils.OUT_PATH / fn).with_suffix(".parquet"))
+    syll.write_parquet((utils.RESULTS_PATH / fn).with_suffix(".parquet"))
 
     return syll
 
 
 def main():
-    w = pl.read_parquet(utils.OUT_PATH / "words.parquet")
+    w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
 
     return (
         get_syllables(w),

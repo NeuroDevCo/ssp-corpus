@@ -6,7 +6,7 @@ from time import time
 import polars as pl
 
 IN_PATH = Path("data/raw")
-OUT_PATH = Path("out")
+RESULTS_PATH = Path("results")
 SYLL_PATH = Path("data/processed/syllables")
 WORD_PATH = Path("data/processed/words")
 IMG_PATH = Path("img")
