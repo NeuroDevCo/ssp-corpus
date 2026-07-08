@@ -19,6 +19,9 @@ from src import languages, scraping, utils, viz
 langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
 w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
 s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
+s_subtlex = pl.read_parquet(utils.RESULTS_PATH / "syllables_freq_subtlex.parquet")
+s_childes = pl.read_parquet(utils.RESULTS_PATH / "syllables_freq_childes.parquet")
+
 p_ssp = pl.read_parquet(utils.RESULTS_PATH / "model-posterior"/ "ssp.parquet")
 p_freq_subtlex = pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "freq_subtlex.parquet")
 p_freq_childes = pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "freq_childes.parquet")
@@ -26,6 +29,12 @@ p_freq_childes = pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "freq_
 w = w.join(langs, on=(set(langs.columns).intersection(w.columns)))
 n_words = w.group_by("iso639p3code").len("n_words")
 s = s.join(langs, on=(set(langs.columns).intersection(s.columns))).join(
+    n_words, on="iso639p3code", how="left"
+)
+s_subtlex = s_subtlex.join(langs, on=(set(langs.columns).intersection(s_subtlex.columns))).join(
+    n_words, on="iso639p3code", how="left"
+)
+s_childes = s_childes.join(langs, on=(set(langs.columns).intersection(s_childes.columns))).join(
     n_words, on="iso639p3code", how="left"
 )
 ```
@@ -38,7 +47,7 @@ The SSP constrains the order of the segments inside a syllable based on sonority
 
 The SSP states that each syllable displays a unique peak of sonority in the nucleus, and that sonority rises monotonically from the syllable margins toward the nucleus [@parker2008sounda]. @gomez2014language showed in newborns that hearing SSP-following syllables (e.g., *bran*) elicits different brain haemodynamic responses compared to SSP-violating syllables (e.g., *lbif*), suggesting that newborns, how have not yet acquired extensive experience with the phonological contraints of their native language, are already sensitive to violations of the SSP. Such early bias toward certain syllabic structures would provide humans with an available mechanism to detect syllables in the continuous speech stream at the earliest stages of language acquisition.
 
-The SSP has been long claimed to be a linguistic universal, on the grounds of SSP-following syllables being preferred over SSP-violating syllables across most languages. For instance, @parker2017sounding collected evidence from 275 experimental works on a typologically diverse list of 75 distinct languages, and found that 63% of the studies suggest that sonority plays a relevant role for accounting for the results, and 22% provide inconclusive evidence, and 15% provide negative evidence for such a relevant role of sonority. The universality of the SSP would place this principle as one of the few cues for speech segmentation present from birth to *all* humans, before language-specific constraints to sound sequences (e.g., phonotactics) are available. The universal status of the SSP is however a matter of debate, as violations of the SSP are common across languages [@yin2023frequent]. For instance, onset consonant clusters of the type initial fricative-stop consonant (e.g., /st/ as in *Stein* in German) or its inverse counterpart in coda stop consonant-fricative (e.g., /ks/ as in *clicks* in English) are attested in many languages [@kawasaki1997alternatives]. Some languages, like Russian, are known for allowing fairly complex consonant clusters at syllabic onset that violate the SSP (e.g., the monosyllabic /vzglyad/ (взгляд [glance]) [@halle1971sound; @ito1982syllable]. More recent accounts of linguistic universality [e.g., Optimality Theory, @prince2004optimalitya] propose a softer understanding of the term "universal", such that linguistic universals represent overall preferences toward certain linguistic structures across languages, instead of hard ON/OFF constraints. Under this account, the role of the SSP as a universally available cue for syllabification becomes a quantitative question: how often do syllables in different languages abide by the SSP? [see @frisch2015preliminary for a similar approach].
+The SSP has been long claimed to be a linguistic universal, on the grounds of SSP-following syllables being preferred over SSP-violating syllables across most languages. For instance, @parker2017sounding collected evidence from 275 experimental works on a typologically diverse list of 75 distinct languages, and found that 63% of the studies suggest that sonority plays a relevant role for accounting for the results, and 22% provide inconclusive evidence, and 15% provide negative evidence for such a relevant role of sonority. The universality of the SSP would place this principle as one of the few cues for speech segmentation present from birth to *all* humans, before language-specific constraints to sound sequences (e.g., phonotactics) are available. The universal status of the SSP is however a matter of debate, as violations of the SSP are common across languages [@yin2023frequent]. For instance, onset consonant clusters of the type initial fricative-stop consonant (e.g., /st/ as in "Stein" in German) or its inverse counterpart in coda stop consonant-fricative (e.g., /ks/ as in "clicks" in English) are attested in many languages [@kawasaki1997alternatives]. Some languages, like Russian, are known for allowing fairly complex consonant clusters at syllabic onset that violate the SSP (e.g., the monosyllabic /vzglyad/ (взгляд [glance]) [@halle1971sound; @ito1982syllable]. More recent accounts of linguistic universality [e.g., Optimality Theory, @prince2004optimalitya] propose a softer understanding of the term "universal", such that linguistic universals represent overall preferences toward certain linguistic structures across languages, instead of hard ON/OFF constraints. Under this account, the role of the SSP as a universally available cue for syllabification becomes a quantitative question: how often do syllables in different languages abide by the SSP? [see @frisch2015preliminary for a similar approach].
 
 The aim of the present paper is to provide empirical estimates of the prevalence of the SSP in a fairly representative sample of `{python} len(set(s["iso639p3code"]))` languages from `{python} len(set(s["family_id"]))` distinct language families. We pursued this goal in two ways. In a first analysis, we estimated the proportion of the syllabic repertoire of each language that followed SSP. Using Bayesian modelling we derived a quantitative estimate of global and language-specific SSP prevalence, along with their corresponding uncertainty. Because items inside the syllabic repertoire of a language likely occur at different rates in speech (e.g., both /ka/ and /gla/ syllables are attested in Spanish, but the former likely appears in a larger number of words), a second analysis investigated whether SSP-following syllables are also more frequent speech compared to SSP-violating syllables. We explored this research question in two datasets. In the first dataset, syllabic frequencies were derived from available databases of lexical frequencies that did not discriminate between adult-directed speech (ADS) and child-directed speech (CDS). In the second dataset, syllabic frecuencies were derived from lexical frequencies in the CHILDES [@macwhinney1990child], which includes corpora of child-directed speech.
 
@@ -81,6 +90,14 @@ y_j &\sim \text{Binomial}(n_j, \frac{\theta_j}{1 - \theta_j}) \\
 $$ {#eq-model-ssp}
 
 ## Results
+
+```{python}
+#| label: results-1
+theta_post = p_ssp.filter(pl.col("param")=="theta")
+gamma_post = p_ssp.filter(pl.col("param")=="gamma")
+```
+
+The final dataset included `{python} f"{len(s):,.0f}"` syllables from `{python} f"{len(s.unique('iso639p3code')):,.0f}"` languages from `{python} f"{len(s.unique('family_id')):,.0f}"` distinct language families. @tbl-ssp-all shows the number of SSP-following and SSP-violating syllables for each language family in the dataset. The posterior distribution of the model parameters is shown in @fig-ssp-params. The median of the posterior distribution of the global proportion of SSP-following syllables across languages ($\theta$) was `{python} f"{theta_post["median"][0]:.3f}"` (95% HDI = [`{python} f"{theta_post['lower'][0]:.3f}"`, `{python} f"{theta_post['upper'][0]:.3f}"`]). The posterior mean of the bias parameter ($\gamma$) was `{python} f"{gamma_post['median'][0]:.3f}"` (95% HDI = [`{python} f"{gamma_post['lower'][0]:.3f}"`, `{python} f"{gamma_post['upper'][0]:.3f}"`]). @fig-estimates-family shows the posterior mean and 95% HDI of the proportion of SSP-following syllables for each language family in the dataset.
 
 ![](/img/ssp-params.png)
 
@@ -185,7 +202,14 @@ $$ {#eq-model-freq}
 
 ## Results
 
+
+The final dataset for generic lexical frequencies comprised `{python} f"{len(s_subtlex.filter(pl.col('freq').is_not_null())):,.0f}"` syllables from `{python} f"{len(s_subtlex.filter(pl.col('freq').is_not_null()).unique('iso639p3code')):,.0f}"` languages from `{python} f"{len(s_subtlex.filter(pl.col('freq').is_not_null()).unique('family_id')):,.0f}"` distinct language families. The results from the Bayesian model indicate that the 95% HDI of the difference between SSP-following and SSP-violating syllables in the location parameter did not exceed zero [$\mu$ = `{python} f"{p_freq_subtlex.filter(pl.col('param')=='beta_1')['lower'][0]:.3f}"`, `{python} f"{p_freq_subtlex.filter(pl.col('param')=='beta_1')['upper'][0]:.3f}"`], indicating no evidence that SSP-following syllables are more frequent than SSP-violating syllables across languages.
+
 ![Distribution of syllabic frequencies across languages for SSP-followingg and SSP-violating syllables.](/img/freq-distribution.png){#fig-freq-distribution}
+
+For lexical frequencies extracted from CHILDES, the number of syllables in the dataset was `{python} f"{len(s_childes.filter(pl.col('freq').is_not_null())):,.0f}"` from `{python} f"{len(s_childes.filter(pl.col('freq').is_not_null()).unique('iso639p3code')):,.0f}"` languages from `{python} f"{len(s_childes.filter(pl.col('freq').is_not_null()).unique('family_id')):,.0f}"` distinct language families. In this dataset, the posterior distribution of the difference between SSP-following and SSP-violating syllables in the location parameter did exceed zero [$\mu$ = `{python} f"{p_freq_childes.filter(pl.col('param')=='beta_1')['lower'][0]:.3f}"`, `{python} f"{p_freq_childes.filter(pl.col('param')=='beta_1')['upper'][0]:.3f}"`], indicating that SSP-following syllables are more frequent than SSP-violating syllables across languages.
+
+@fig-freq-distribution shows the distribution of syllabic frequencies across languages for SSP-following and SSP-violating syllables. The posterior distribution of the model parameters is shown in @fig-freq-params.
 
 
 ::: {#fig-freq-params layout-ncol=2}
@@ -197,9 +221,53 @@ $$ {#eq-model-freq}
 Posterior distribution of main parameters in @eq-model-freq.
 :::
 
+
+# Discussion
+
 # Appendix
 
-## Number of observations and SSP prevalence
+## Number of SSP-following and SSP-violating syllables per language and language family
+
+`#show figure: set block(breakable: true)`{=typst}
+
+```{python}
+#| label: tbl-ssp-all
+#| tbl-cap: Number of SSP-following and SSP-violating syllables per language and language family.
+
+tbl_data = (
+    s.group_by(["family_id", "lang"])
+    .agg(
+        [
+            pl.count("syll").alias("n"),
+            pl.col("n_words").first(),
+            pl.sum("is_ssp").alias("n_following"),
+            (pl.count("syll") - pl.sum("is_ssp")).alias("n_violating"),
+        ]
+    )
+    .with_columns((pl.col("n_following") / pl.col("n")).alias("prop_following"))
+    .sort(["family_id", "prop_following"], descending=False)
+)
+
+(
+    GT(tbl_data, rowname_col="lang", groupname_col="family_id", auto_align=True)
+    .fmt_integer(cs.numeric())
+    .fmt_percent("prop_following")
+    .cols_label(
+        family_id="Language family",
+        lang="Language (ISO 639-3 code)",
+        n="N syllables",
+        n_following="Following",
+        n_violating="Violating",
+        prop_following="% Following",
+        n_words="N words",
+    )
+    .sub_missing(cs.all(), "-")
+)
+```
+
+`#set block(breakable: false)`{=typst}
+
+## Relationship between number of observations and SSP prevalence
 
 ![Relationship between the number of observed syllables and the SSP-prevalence in each language. The X-axis indicates the log-transformed number of observed syllables in the dataset. The Y-axis indicates the SSP prevalence (i.e., observed proportion of syllables that follow the SSP in the language's dataset). Each dot and interval indicate the data for one language, and the standard error of the SSP-prevalence. Marks in the top and right margin of the figure indicate the distribution of the observations. The predictions of a linear regression model between both variables are shown as a green line.](/img/ssp-bias.png)
 
