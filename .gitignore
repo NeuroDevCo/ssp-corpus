@@ -174,10 +174,8 @@ cython_debug/
 
 /.quarto/
 
+data/
 
-data/*.zip
-docs/*.png
-docs/*.pdf
 *.tsv
 *.csv
 *.png
