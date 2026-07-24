@@ -189,3 +189,5 @@ data/
 /docs/dashboard_files/
 _freeze/
 docs/*_files/
+
+*_cache
