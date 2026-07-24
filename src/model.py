@@ -1,11 +1,11 @@
-from dataclasses import dataclass, asdict
+import re
+from dataclasses import asdict, dataclass
 from multiprocessing import cpu_count
 from pathlib import Path
-import re
 
-from cmdstanpy import CmdStanModel, CmdStanMCMC
 import numpy as np
 import polars as pl
+from cmdstanpy import CmdStanMCMC, CmdStanModel
 
 from src import utils
 
@@ -169,7 +169,7 @@ def main():
         _, samples = fit_model(get_freq_stan_data(data, names=True), freq_model)
         samples.draws_pd().to_parquet(POST_PATH / f"samples_freq_{which}.parquet")
         post = get_posterior(
-            samples, group_names=stan_data["j_names"], group_params=["u_j"]
+            samples, group_names=stan_data["j_names"], group_params=["u_1"]
         )
         post.write_parquet(POST_PATH / f"freq_{which}.parquet")
         out.append(post)

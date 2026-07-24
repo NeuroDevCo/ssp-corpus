@@ -5,6 +5,11 @@ format:
   dashboard:
     nav-buttons: [github]
 
+server: shiny
+
+theme: 
+  - style.scss
+
 message: false
 warning: false
 echo: false
@@ -20,74 +25,76 @@ from matplotlib import ticker
 import numpy as np
 import polars as pl
 
-RESULTS_PATH = Path("../out")
+RESULTS_PATH = Path("../results")
+POST_PATH = RESULTS_PATH / "model-posterior"
 COLOR = "darkslategrey"
 
-langs = pl.read_parquet(RESULTS_PATH / "languages.parquet")
+langs_all = pl.read_parquet(RESULTS_PATH / "languages.parquet")
 w = pl.read_parquet(RESULTS_PATH / "words.parquet")
 s = pl.read_parquet(RESULTS_PATH / "syllables.parquet")
-sf = pl.read_parquet(RESULTS_PATH / "syllables_freq.parquet")
-f = pl.read_parquet(RESULTS_PATH / "frequencies.parquet")
-p_ssp = pl.read_parquet(RESULTS_PATH / "posterior_ssp.parquet")
-p_freq = pl.read_parquet(RESULTS_PATH / "posterior_freq.parquet")
+langs = langs_all.filter(
+    pl.col("iso639p3code").is_in(set(w.get_column("iso639p3code")))
+)
+
+sf_subtlex = pl.read_parquet(RESULTS_PATH / "syllables_freq_subtlex.parquet")
+sf_childes = pl.read_parquet(RESULTS_PATH / "syllables_freq_childes.parquet")
+p_ssp = pl.read_parquet(POST_PATH / "ssp.parquet")
+p_freq_subtlex = pl.read_parquet(POST_PATH / "freq_subtlex.parquet")
+p_freq_childes = pl.read_parquet(POST_PATH / "freq_childes.parquet")
 
 cols = set(langs.columns).intersection(w.columns)
-w = w.join(langs, on=list(cols)).with_columns(pl.col("word").str.len_chars().alias("n_char"))
-s = s.join(langs, on=list(cols)).with_columns(n_phon = pl.col("syll").str.len_chars())
+w = w.join(langs, on=list(cols)).with_columns(
+    pl.col("word").str.len_chars().alias("n_char")
+)
+s = s.join(langs, on=list(cols)).with_columns(n_phon=pl.col("syll").str.len_chars())
 ```
-    
+
 # Languages
 
-## Row 
+## Row {height=15%}
 
 ```{python}
 #| content: valuebox
-#| title: "Languages in raw dataset"
+#| title: Languages scraped from Wikipedia
 #| icon: pencil
-#| color: primary
-dict(
-  value = len(langs)
-)
+#| color: secondary
+dict(value=len(langs))
 ```
 
 ```{python}
 #| content: valuebox
 #| title: "Languages in words dataset"
 #| icon: pencil
-#| color: primary
-dict(
-  value = len(set(w["iso639p3code"]))
-)
+#| color: secondary
+dict(value=len(set(w["iso639p3code"])))
 ```
 
 ```{python}
 #| content: valuebox
 #| title: "Languages in syllables dataset"
 #| icon: pencil
-#| color: primary
-dict(
-  value = len(set(s["iso639p3code"]))
-)
+#| color: secondary
+dict(value=len(set(s["iso639p3code"])))
 ```
 
 ```{python}
 #| content: valuebox
 #| title: "Languages in syllable frequencies dataset"
 #| icon: pencil
-#| color: primary
-dict(
-  value = len(set(sf["iso639p3code"]))
-)
+#| color: secondary
+dict(value=len(set(sf_subtlex["iso639p3code"])))
 ```
 
 ## Row
 
-### Column
+### Column {width=40%}
+
+#### Row {height="40%"}
 
 ```{python}
-#| label: fig-available-languages
+#| label: available-languages
 data = (
-    langs.with_columns(
+    langs_all.with_columns(
         status=pl.when(pl.col("iso639p3code").is_in(w["iso639p3code"].to_list()))
         .then(pl.lit("Available"))
         .otherwise(pl.lit("Not available"))
@@ -109,534 +116,45 @@ p = ax.pie(
 )
 ```
 
-
-### Column
+#### Row {height="60%"}
 
 ```{python}
-#| label: fig-language-families
-cols = ["iso639p3code", "family_id"]
-data = [
-    langs.select(cols).with_columns(source=pl.repeat("Glottolog", len(langs))),
-    w.select(cols)
-    .unique("iso639p3code")
-    .with_columns(source=pl.repeat("Selected", pl.len())),
-]
-data = (
-    pl.concat(data)
-    .group_by(["source", "family_id"])
-    .len("n")
-    .with_columns(
-        rank=pl.col("n")
-        .over("source")
-        .rank("ordinal", descending=True)
-        .cast(pl.Float64)
-        / pl.len()
-    )
-    .sort("rank")
-    .pivot(index="family_id", on="source", values="rank")
-    .rename(lambda x: x.lower())
-    .fill_null(0)
-    .with_columns((pl.col("glottolog") - pl.col("selected")).alias("diff"))
-    .with_columns(
-        diff=(pl.col("diff") - pl.col("diff").min())
-        / (pl.col("diff").max() - pl.col("diff").min())
-    )
-    .sort("diff", descending=True)
-)
+#| label: available-families
+fig_data = langs.group_by("family_id").len("n").sort("n")
 
 fig, ax = plt.subplots(1, 1)
-for f, g, si, d in data.iter_rows(named=False):
-    ax.plot(
-        ["Glottolog", "Selected"],
-        [g, si],
-        c="lightgrey" if si == 0 else COLOR,
-        alpha=0.2 if si == 0 else 1,
-    )
-    if si != 0:
-        _ = ax.text(1.07, si, f, ha="left", fontsize=6, alpha=0.75, color=COLOR)
-_ = ax.set_yticks([0, 1])
-_ = ax.text(x=-0.15, y=0, s="Least languages", rotation=90, va="bottom")
-_ = ax.text(x=-0.15, y=1, s="Most languages", rotation=90, va="top")
+ax.barh(fig_data["family_id"], fig_data["n"], color=COLOR)
+for f, n in fig_data.iter_rows():
+    _ = ax.text(n, f, s=n, ha="left", va="center")
+ax.spines[["right", "top"]].set_visible(False)
+# ax.tick_params(axis="x", labelrotation=90)
+fig.set_size_inches(6, 6)
+```
 
+### Column {width="60%"}
+
+```{python}
+#| label: languages
+show(langs)
 ```
 
 
-# Words {scrollable=true}
+# Words
 
-## Column
+## {.toolbar}
 
 ```{python}
-data = (
-    w.group_by("iso639p3code")
-    .len("n")
-    .with_columns(
-        qtile=pl.col("n").qcut(
-            [0.25, 0.50, 0.75], labels=["1-25%", "26-50%", "51-75%", "76-100%"]
-        )
-    )
-).sort("qtile", descending=True)
+from shiny.express import render, ui
 
-n_qtiles = len(data.unique("qtile"))
-fig, axes = plt.subplots(1, n_qtiles, figsize=(10, 7))
-
-for i, d in enumerate(data.partition_by("qtile")):
-    lang, n, q = d.sort("n").iter_columns()
-    ax = axes[i]
-    _ = ax.barh(lang, n, color=COLOR)
-    _ = ax.set_title(f"Percentile {q[0]}", fontsize=10)
-    
-    _ = ax.tick_params(axis="y", labelsize=6.5)
-    _ = ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{int(x):5,d}"))
-    _ = ax.axvline(100, linestyle="dotted", color="orange")
-_ = fig.suptitle(f"Showing {len(data)} languages")
-fig.tight_layout()
+ui.input_select("x", "Language:", choices=langs.get_column("lang").to_list())
 ```
 
-## Row
-
-### Column
-
 ```{python}
-#| label: fig-word-lengths
-v = {"char": "Characters", "phon": "Phonemes", "syll": "Syllables"}
+#| label: words
+tbl_data = w.filter(pl.col("lang") == input.x())
 
-fig, axes = plt.subplots(len(v), 1)
-for i, (var, label) in enumerate(v.items()):
-    x=w[f"n_{var}"]
-    ax = axes[i]
-    _ = ax.hist(x, bins=len(set(x)), color=COLOR)
-    _ = ax.set_title(label)
-    _ = ax.set_yticks([])
-fig.tight_layout()
 
-```
-
-### Column
-
-```{python}
-#| label: fig-length-n
-data = (
-    w
-    .group_by(["iso639p3code"])
-    .agg(
-        mean_phonemes=pl.col("n_phon").mean(),
-        std_phonemes=pl.col("n_phon").std(),
-        mean_characters=pl.col("n_char").mean(),
-        std_characters=pl.col("n_char").std(),
-        mean_syllables=pl.col("n_syll").mean(),
-        std_syllables=pl.col("n_syll").std(),
-        n=pl.len().log(),
-    )
-)
-
-units = ["characters", "phonemes", "syllables"]
-fig, (axes) = plt.subplots(1, len(units), figsize=(12, 5))
-
-for i, var in enumerate(units):
-    x = data["n"]
-    coef = np.polyfit(x.to_list(), data[f"mean_{var}"].to_list(), 1)
-    fit = np.poly1d(coef)
-    ax = axes[i]
-    _=ax.errorbar(
-        x,
-        data[f"mean_{var}"],
-        yerr=data[f"std_{var}"],
-        c="lightgrey",
-        alpha=1 / 4,
-        linestyle="None",
-    )
-    _=ax.plot(x, fit(x), lw=3, c=COLOR)
-    _=ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{int(x):5,d}"))
-    ax.scatter(x, data[f"mean_{var}"], s=10, c=COLOR)
-    _=ax.set_title(f"{var.title()}")
-    _, ymax = ax.get_ylim()
-    _=ax.scatter(data["n"], [ymax + (ymax*0.05)] * len(data), marker="|", c="slategrey", alpha= 0.5)
-
-    _, xmax = ax.get_xlim()
-    _=ax.scatter([xmax + (xmax * 0.05)]*len(data), data[f"mean_{var}"],  marker="_", c="slategrey", alpha = 0.1)
-_=fig.supxlabel("Log(number of words)")
-fig.tight_layout()
-```
-
-
-## Row
-
-```{python}
-d=w.select(["iso639p3code", "lang", "family_id", "phon", "syll"])
-show(d)
-```
-
-# Lexical frequencies
-
-## Row
-
-### Column
-
-```{python}
-#| label: fig-freq-available
-data = (
-    w.select(["iso639p3code", "freq"])
-    .group_by("iso639p3code")
-    .agg(pl.col("freq").is_null().sum().alias("n_missing"), n=pl.len())
-    .with_columns(prop_missing=pl.col("n_missing") / pl.col("n")).sort("prop_missing", descending=True)
-    .with_columns(availability =pl.when(pl.col("prop_missing")==1).then(pl.lit("No frequecies available")).otherwise(pl.lit("Some frequencies available")))
-    .group_by("availability")
-    .len("n")
-)
-
-values = data["n"]
-labels = [f"{s}\n({n:,}, {n / sum(values):.2%})" for s, n in data.iter_rows()]
-
-fig, ax = plt.subplots(1, 1)
-p = ax.pie(
-    values,
-    labels=labels,
-    radius=1,
-    wedgeprops=dict(width=0.5, edgecolor="w"),
-    colors=["lightgrey", COLOR],
-)
-```
-
-### Column
-
-#### Row
-
-```{python}
-#| label: fig-freq-n
-data = (
-    w.select(["iso639p3code", "freq"])
-    .group_by("iso639p3code")
-    .agg(pl.col("freq").is_not_null().sum().alias("n_obs"), n=pl.len())
-    .with_columns(prop_obs=pl.col("n_obs") / pl.col("n"), n=pl.col("n").log())
-    .sort("prop_obs", descending=True)
-    .filter(pl.col("prop_obs") != 0)
-)
-
-fig, ax = plt.subplots(1, 1)
-ax.scatter(data["n"], data["prop_obs"], c="lightgrey")
-coef = np.polyfit(data["n"].to_list(), data["prop_obs"].to_list(), 1)
-fit = np.poly1d(coef)
-ax.plot(data["n"], fit(data["n"]), lw=3, c=COLOR)
-_ = ax.set_ylabel("Observed lexical frequencies")
-ax.set_label("Log(Number of words)")
-_ = ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
-
-_, ymax = ax.get_ylim()
-ax.scatter(
-    data["n"], [ymax + (ymax * 0.1)] * len(data), marker="|", c="slategrey", alpha=0.5
-)
-
-_, xmax = ax.get_xlim()
-ax.scatter(
-    [xmax + (xmax * 0.1)] * len(data),
-    data["prop_obs"],
-    marker="_",
-    c="slategrey",
-    alpha=0.5,
-)
-```
-
-
-#### Row
-
-
-```{python}
-#| label: fig-avg-freq-n
-data = (
-    w.select(["iso639p3code", "word", "freq"])
-    .drop_nulls()
-    .group_by("iso639p3code")
-    .agg(pl.col("freq").mean(), n=pl.len().log())
-)
-
-fig, ax = plt.subplots(1, 1)
-ax.scatter(data["n"], data["freq"], color="lightgrey")
-coef = np.polyfit(data["n"].to_list(), data["freq"].to_list(), 1)
-fit = np.poly1d(coef)
-ax.plot(data["n"], fit(data["n"]), lw=3, c=COLOR)
-_ = ax.set_xlabel("Log(Number of words)")
-_ = ax.set_ylabel("Average lexical frequency (Zipf)")
-
-_, ymax = ax.get_ylim()
-ax.scatter(
-    data["n"], [ymax + (ymax * 0.1)] * len(data), marker="|", c="slategrey", alpha=0.5
-)
-
-_, xmax = ax.get_xlim()
-ax.scatter(
-    [xmax + (xmax * 0.1)] * len(data),
-    data["freq"],
-    marker="_",
-    c="slategrey",
-    alpha=0.5,
-)
-```
-
-# Syllables
-
-## Row
-
-### Column
-
-```{python}
-data = (
-    s.group_by("iso639p3code")
-    .len("n")
-    .with_columns(
-        qtile=pl.col("n").qcut(
-            [0.25, 0.50, 0.75], labels=["1-25%", "26-50%", "51-75%", "76-100%"]
-        )
-    )
-).sort("qtile", descending=True)
-
-n_qtiles = len(data.unique("qtile"))
-fig, axes = plt.subplots(1, n_qtiles, figsize=(10, 7))
-
-for i, d in enumerate(data.partition_by("qtile")):
-    lang, n, q = d.sort("n").iter_columns()
-    ax = axes[i]
-    ax.barh(lang, n, color=COLOR)
-    _ = ax.set_title(f"Percentile {q[0]}", fontsize=10)
-
-    ax.tick_params(axis="y", labelsize=6.5)
-    _ = ax.xaxis.set_major_formatter(
-        ticker.FuncFormatter(lambda x, pos: f"{int(x):5,d}")
-    )
-    ax.axvline(20, linestyle="dotted", color="orange")
-_=fig.suptitle(f"Showing {len(data)} languages")
-_=fig.supxlabel("Number of syllables")
-fig.tight_layout()
-```
-
-### Column
-
-```{python}
-fig, ax = plt.subplots(1, 1)
-labels, values = s["n_phon"].value_counts().iter_columns()
-value_labels = [f"{v:5,d} ({v / sum(values):.2%})" for v in values]
-p = ax.bar(labels, values, color=COLOR, edgecolor="white", linewidth=3)
-_ = ax.bar_label(p, value_labels, fontsize=7)
-_ = ax.set_title(label)
-ax.set_yticks([])
-_ = ax.set_xlabel("Number of phonemes")
-fig.tight_layout()
-```
-
-
-## Row
-
-```{python}
-data = (
-    s.group_by("struct")
-    .len("n")
-    .sort("n")
-    .with_columns(
-        struct=pl.when(pl.col("n") < (0.01 * len(s)))
-        .then(pl.lit("Other"))
-        .otherwise("struct"),
-    )
-    .group_by("struct")
-    .agg(n=pl.col("n").sum())
-    .sort("n")
-    .with_columns(
-        prop=pl.col("n") / pl.col("n").sum(),
-        order=pl.when(pl.col("struct") == "Other").then(1).otherwise(0),
-    )
-    .sort(["order", "prop"], descending=[True, False])
-)
-
-
-fig, ax = plt.subplots(1, 1, figsize=(5, 5))
-ax.barh(data["struct"], data["n"], color=COLOR, edgecolor="white", linewidth=3)
-_ = ax.set_title("C = Consonant | V = Vowel | v = Semivowel")
-_ = ax.set_xlabel("Number of distinct syllabic structures")
-ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{int(x):5,d}"))
-
-ticks = ax.get_yticks()
-labels = [f"{n:.3%}" for n in data["prop"]]
-ax2 = ax.secondary_yaxis("right")
-_ = ax2.set_yticks(ticks)
-_ = ax2.set_yticklabels(labels, ha="left")
-_ = ax2.tick_params(axis="y", labelsize=7)
-
-fig.tight_layout()
-```
-
-## Row
-
-```{python}
-s.select(["iso639p3code", "lang", "family_id", "syll", "struct", "sonority", "is_ssp"])
-```
-
-# SSP
-
-## Row
-
-### Column
-
-#### Row
-
-```{python}
-data = s.select(["iso639p3code", "is_ssp"]).get_column("is_ssp").value_counts()
-values = data["count"]
-labels = [
-    f"{'SSP-following' if s else 'SSP-violating'}\n({n:,}, {n / sum(values):.2%})"
-    for s, n in data.iter_rows()
-]
-
-fig, ax = plt.subplots(1, 1)
-p = ax.pie(
-    values,
-    labels=labels,
-    radius=1,
-    wedgeprops=dict(width=0.5, edgecolor="w"),
-    colors=["lightgrey", COLOR],
-)
-```
-
-#### Row
-
-```{python}
-data = (
-    (
-        s.group_by("iso639p3code")
-        .agg(pl.col("is_ssp").mean(), n=pl.len())
-        .sort("is_ssp", descending=False)
-        .with_columns(is_ssp=pl.when(pl.col("is_ssp") == 1).then(1).otherwise(0))
-    )
-    .get_column("is_ssp")
-    .value_counts()
-)
-
-values = data["count"]
-labels = [
-    f"{'100% SSP-following' if s else '<100% SSP-following'}\n({n:,}, {n / sum(values):.2%})"
-    for s, n in data.iter_rows()
-]
-
-fig, ax = plt.subplots(1, 1)
-p = ax.pie(
-    values,
-    labels=labels,
-    radius=1,
-    wedgeprops=dict(width=0.5, edgecolor="w"),
-    colors=["lightgrey", COLOR],
-)
-```
-
-
-### Column
-
-
-```{python}
-data = s.group_by("iso639p3code").agg(pl.col("is_ssp").mean())
-
-fig, ax = plt.subplots(1, 1)
-p = ax.hist(data["is_ssp"], density=True, histtype="stepfilled", bins=20, lw=3, color=COLOR)
-_, ymax = ax.get_ylim()
-ax.scatter(data["is_ssp"], [ymax + (ymax*0.1)] * len(data), marker="|", c="slategrey", alpha = 0.5)
-
-_=ax.set_xlabel("Proportion of SSP-following syllables")
-ax.set_xlim(0, 1)
-ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
-```
-
-## Row
-
-### Column
-
-```{python}
-data = (
-    s.group_by("iso639p3code")
-    .agg(pl.col("is_ssp").mean(), n=pl.len())
-    .filter(pl.col("is_ssp") != 1)
-    .with_columns(se=((pl.col("is_ssp") * (1 - pl.col("is_ssp"))) / pl.col("n")).sqrt())
-    .with_columns(
-        qtile=pl.col("is_ssp").qcut([0.5], labels=["Bottom half", "Top half"])
-    )
-    .sort(["qtile", "is_ssp"], descending=[False, True])
-    .partition_by("qtile", as_dict=True)
-)
-
-
-fig, axes = plt.subplots(1, len(data), figsize=(7, 5))
-for i, (k, d) in enumerate(data.items()):
-    ax = axes[i]
-    dist_to_limit = d["is_ssp"] - 1
-    yerr_clipped = np.maximum(d["se"], dist_to_limit)
-
-    _ = ax.errorbar(
-        d["is_ssp"],
-        d["iso639p3code"],
-        xerr=yerr_clipped,
-        c=COLOR,
-        alpha=1 / 4,
-        linestyle="None",
-    )
-    _ = ax.scatter(d["is_ssp"], d["iso639p3code"], c=COLOR, s=7)
-
-    _ = ax.tick_params(axis="y", labelsize=6.5)
-    _ = ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
-    ax.xaxis.grid(True, color="lightgrey", linestyle=":")
-
-    ticks = ax.get_yticks()
-    labels = [f"{p:.1%} ($N={n:5,d}$)" for p, n in zip(d["is_ssp"], d["n"])]
-    ax2 = ax.secondary_yaxis("right")
-    _ = ax2.set_yticks(ticks)
-    _ = ax2.set_yticklabels(labels, ha="left")
-    _ = ax2.tick_params(axis="y", labelsize=5)
-
-_ = fig.suptitle("Showing SSP-following < 100% languages only")
-_ = fig.supxlabel("Proportion of SSP-following syllables")
-fig.tight_layout()
-```
-
-### Column
-
-```{python}
-data = (
-    s.group_by(["iso639p3code"])
-    .agg(pl.col("is_ssp").mean(), n=pl.len().log())
-    .with_columns(se=((pl.col("is_ssp") * (1 - pl.col("is_ssp"))) / pl.col("n")).sqrt())
-)
-
-
-fig, ax = plt.subplots(1, 1)
-ax.scatter(data["n"], data["is_ssp"], color=COLOR, s=10)
-dist_to_limit = data["is_ssp"] - 1
-yerr_clipped = np.maximum(data["se"], dist_to_limit)
-ax.errorbar(
-    data["n"],
-    data["is_ssp"],
-    yerr=yerr_clipped,
-    c="lightgrey",
-    alpha=1 / 4,
-    linestyle="None",
-)
-
-coef = np.polyfit(data["n"].to_list(), data["is_ssp"].to_list(), 1)
-fit = np.poly1d(coef)
-
-ax.plot(data["n"], fit(data["n"]), lw=3, c=COLOR)
-_ = ax.set_xlabel("Log(Number of syllables)")
-_ = ax.set_ylabel("Proportion of SSP-following syllables")
-
-_, ymax = ax.get_ylim()
-_ = ax.scatter(
-    data["n"], [ymax + (ymax * 0.025)] * len(data), marker="|", c="slategrey", alpha=0.5
-)
-
-_, xmax = ax.get_xlim()
-_ = ax.scatter(
-    [xmax + (xmax * 0.025)] * len(data),
-    data["is_ssp"],
-    marker="_",
-    c="slategrey",
-    alpha=0.5,
-)
-
-ticks = np.linspace(0.5, 1, 6)
-_ = ax.set_yticks(ticks)
-_ = ax.set_yticklabels([f"{t:.0%}" for t in ticks])
-ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
+@render.DataTable
+def distable():
+    return render.DataTable(tbl_data)
 ```

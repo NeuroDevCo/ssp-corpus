@@ -2,17 +2,59 @@
 
 from collections import defaultdict
 from pathlib import Path
-import polars as pl
 
-from great_tables import GT
-from matplotlib import pyplot as plt
-from matplotlib import colors, ticker
 import numpy as np
+import polars as pl
+from great_tables import GT, nanoplot_options
+from matplotlib import colors, ticker
+from matplotlib import pyplot as plt
 
 from src import languages, model, utils
+from src.utils import IMG_PATH
 
 COLOR = "darkslategrey"
 DPI = 800
+
+
+def plot_ssp_examples():
+    word_ex = {"/kɹɪsp/": [1, 7, 8, 3, 1], "/snæps/": [3, 5, 9, 1, 3]}
+    colors = ["darkslategrey", "orange"]
+    legend = ["/kɹɪsp/ (SSP-following)", "/snæps/ (SSP-violating)"]
+    fig, ax = plt.subplots(1, 1)
+
+    for idx, (_, si) in enumerate(word_ex.items()):
+        ax.plot(range(5), si, lw=5, c=colors[idx], zorder=-1)
+        ax.scatter(range(5), si, c=colors[idx], label=legend[idx], s=300, zorder=0)
+
+    for idx in range(5):
+        ax.text(
+            idx,
+            word_ex["/kɹɪsp/"][idx],
+            s="kɹɪsp"[idx],
+            color="white",
+            va="center",
+            ha="center",
+            fontsize=10,
+        )
+        ax.text(
+            idx,
+            word_ex["/snæps/"][idx],
+            s="snæps"[idx],
+            va="center",
+            ha="center",
+            fontsize=10,
+        )
+
+    ax.spines[["right", "top", "bottom"]].set_visible(False)
+    ax.tick_params(length=0)
+    ax.set_xticks([])
+    ax.set_yticks(range(11))
+    ax.set_ylabel("Sonority Index")
+
+    fig.tight_layout()
+    fig.set_size_inches(6, 2.5)
+    fig.legend(frameon=False, fontsize=7, loc="upper right")
+    fig.savefig(IMG_PATH / "ssp-examples.png", dpi=800)
 
 
 def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]:
@@ -107,7 +149,7 @@ def plot_ssp_langs():
         ax2.set_yticklabels(labels, ha="left")
         ax2.tick_params(axis="y", labelsize=5)
 
-    fig.supxlabel("Proportion of SSP-following syllables (%)", y=0.15)
+    fig.suptitle("Proportion of SSP-following syllables (%)")
     fig.tight_layout()
     fig.legend(
         title=r"Language family",
@@ -116,10 +158,10 @@ def plot_ssp_langs():
         frameon=False,
         fontsize=7,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.125),
+        bbox_to_anchor=(0.5, 0),
     )
     fig.set_size_inches(8, 8)
-    fig.savefig(utils.IMG_PATH / "ssp-groups.png", dpi=DPI, bbox_inches="tight")
+    fig.savefig(utils.IMG_PATH / "ssp-langs.png", dpi=DPI, bbox_inches="tight")
 
 
 def plot_freq_distribution():
@@ -188,7 +230,6 @@ def plot_ssp_bias():
 
     ax.plot(data["n"], fit(data["n"]), lw=3, c=COLOR)
     ax.set_xlabel("Log(Number of syllables)")
-    ax.set_ylabel("Proportion of SSP-following syllables")
 
     _, ymax = ax.get_ylim()
     ax.scatter(
@@ -212,7 +253,7 @@ def plot_ssp_bias():
     ax.set_yticks(ticks)
     ax.set_yticklabels([f"{t:.0%}" for t in ticks])
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: f"{x:.0%}"))
-
+    fig.suptitle("Proportion of SSP-following syllables")
     fig.savefig(Path("img/ssp-bias.png"), dpi=800)
 
 
@@ -256,7 +297,8 @@ def plot_ssp_params(file: Path = Path("img/ssp-params.png")):
         ax[idx].set_title(f"$\\{p['param']}$\n", weight="bold")
         ax[idx].text(xpos, ypos * 1.25, label, ha="center", fontsize=8)
 
-    fig.set_size_inches(8, 3)
+    fig.tight_layout()
+    fig.set_size_inches(8, 3.5)
 
     if file:
         fig.savefig(file, dpi=800)
@@ -318,21 +360,45 @@ def plot_freq_params(which: str = "subtlex"):
     fig.savefig(fn, dpi=800)
 
 
-def plot_freq(which: str = "subtlex"):
+def plot_freq_ssp(which: str = "subtlex"):
     if which not in ["subtlex", "childes"]:
         raise ValueError("which must be one of 'subtlex' or 'childes'")
 
-    s = (
-        pl.read_parquet(utils.RESULTS_PATH / f"syllables_freq_{which}.parquet")
-        .group_by(["is_ssp", "iso639p3code"])
-        .agg(freq=pl.col("freq").drop_nans().mean())
+    s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
+    langs = (
+        pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
+        .sort("family_id")
+        .select(["iso639p3code", "lang", "family_id"])
     )
-    fig, ax = plt.subplots(1, 1)
-    for r in s.iter_rows(named=True):
-        ax.scatter(r["is_ssp"], r["freq"])
 
-    for r in s.pivot(on="is_ssp", index="iso639p3code", values="freq").drop_nulls():
-        pass
+    data = (
+        s.group_by("iso639p3code")
+        .agg(pl.col("is_ssp").mean(), n=pl.len())
+        .with_columns(
+            se=((pl.col("is_ssp") * (1 - pl.col("is_ssp"))) / pl.col("n")).sqrt()
+        )
+    )
+
+    ssp_post = (
+        pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "ssp.parquet")
+        .with_columns(pl.col("param").str.replace_many(["theta_j[", "]"], ["", ""]))
+        .join(data, left_on="param", right_on="iso639p3code", how="inner")
+        .join(langs, left_on="param", right_on="iso639p3code", how="inner")
+        .select("param", "lang", "median")
+    )
+
+    freq_post = (
+        pl.read_parquet(
+            utils.RESULTS_PATH / "model-posterior" / f"freq_{which}.parquet"
+        ).filter(pl.col("param").is_in(ssp_post.get_column("param")))
+        # .with_columns(pl.col("param").str.replace_many(["theta_j[", "]"], ["", ""]))
+    )
+
+    out = (
+        freq_post.median()
+        .transpose(header_name="param", include_header=True)
+        .rename({"column_0": "median"})
+    )
 
 
 def table_examples():
@@ -394,12 +460,24 @@ def table_examples():
             sonority="Sonority index",
             sonority_2="",
         )
-        .fmt_nanoplot(columns="sonority_2")
+        .fmt_nanoplot(
+            columns="sonority_2",
+            options=nanoplot_options(
+                data_line_stroke_color=COLOR,
+                data_line_stroke_width=7,
+                data_area_fill_color="orange",
+                data_point_fill_color="white",
+                data_point_stroke_color=COLOR,
+                data_point_stroke_width=7,
+            ),
+        )
     ).gtsave(Path("img/examples.png"), zoom=10)
 
 
 def main():
     table_examples()
+    plot_ssp_examples()
+    plot_ssp_bias()
     plot_ssp_params()
     plot_ssp_langs()
     plot_freq_distribution()

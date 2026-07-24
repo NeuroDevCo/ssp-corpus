@@ -183,13 +183,11 @@ docs/*.pdf
 *.png
 **/*.quarto_ipynb
 
-model/**/*.csv
-model/**/*.txt
-model
-
 
 /results/*.parquet
 /results/childes-freqs/
 /results/model-posterior/
 /docs/index_files/
 /docs/dashboard_files/
+_freeze/
+docs/*_files/

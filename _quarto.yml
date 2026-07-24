@@ -3,15 +3,19 @@ project:
     - docs/index.qmd
   execute-dir: project
 
-title: "The cross-linguistic prevalence of the sonority sequencing principle in adult and child-directed speech"
-format: typst
+title: "Estimating the cross-linguistic prevalence of the Sonority Sequencing Principle in adult and child-directed speech"
+format:
+  typst: default
+  docx: default
+number-sections: true
 bibliography: docs/bibliography.bib
 csl: docs/apa.csl
+
 
 echo: false
 warning: false
 error: false
-freeze: false
+freeze: auto
 code-folded: true
 fig-dpi: 800
 
