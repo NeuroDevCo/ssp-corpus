@@ -360,47 +360,6 @@ def plot_freq_params(which: str = "subtlex"):
     fig.savefig(fn, dpi=800)
 
 
-def plot_freq_ssp(which: str = "subtlex"):
-    if which not in ["subtlex", "childes"]:
-        raise ValueError("which must be one of 'subtlex' or 'childes'")
-
-    s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
-    langs = (
-        pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
-        .sort("family_id")
-        .select(["iso639p3code", "lang", "family_id"])
-    )
-
-    data = (
-        s.group_by("iso639p3code")
-        .agg(pl.col("is_ssp").mean(), n=pl.len())
-        .with_columns(
-            se=((pl.col("is_ssp") * (1 - pl.col("is_ssp"))) / pl.col("n")).sqrt()
-        )
-    )
-
-    ssp_post = (
-        pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "ssp.parquet")
-        .with_columns(pl.col("param").str.replace_many(["theta_j[", "]"], ["", ""]))
-        .join(data, left_on="param", right_on="iso639p3code", how="inner")
-        .join(langs, left_on="param", right_on="iso639p3code", how="inner")
-        .select("param", "lang", "median")
-    )
-
-    freq_post = (
-        pl.read_parquet(
-            utils.RESULTS_PATH / "model-posterior" / f"freq_{which}.parquet"
-        ).filter(pl.col("param").is_in(ssp_post.get_column("param")))
-        # .with_columns(pl.col("param").str.replace_many(["theta_j[", "]"], ["", ""]))
-    )
-
-    out = (
-        freq_post.median()
-        .transpose(header_name="param", include_header=True)
-        .rename({"column_0": "median"})
-    )
-
-
 def table_examples():
     langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
     s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
