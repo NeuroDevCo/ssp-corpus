@@ -8,7 +8,6 @@ from rich.console import Console
 
 from src import languages, model, syllables, viz, words
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         prog="ssp-corpus",
@@ -40,7 +39,8 @@ if __name__ == "__main__":
 
     if args.model:
         con.rule("Fitting Bayesian models")
-        post_ssp, post_freq = model.main()
+        conf = model.Conf()
+        post_ssp, post_freq = model.main(conf)
 
     if args.viz:
         con.rule("Making figures")

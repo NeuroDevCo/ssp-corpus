@@ -68,7 +68,7 @@ def get_freq_stan_data(x: pl.DataFrame, names: bool = True) -> dict:
     return out
 
 
-def fit_model(stan_data: dict, stan_file: Path | str, conf: Conf = Conf(), **kwargs):
+def fit_model(stan_data: dict, stan_file: Path | str, conf: Conf, **kwargs):
     model = CmdStanModel(stan_file=str(stan_file))
 
     if conf.output_dir:
@@ -146,7 +146,7 @@ def hdi(x, prob: float = 0.95):
     return hdi_interval
 
 
-def main():
+def main(conf: Conf):
     out = []
     ssp_model = utils.MODEL_PATH / "ssp.stan"
     freq_model = utils.MODEL_PATH / "freq.stan"
@@ -154,7 +154,7 @@ def main():
     # fit SSP model
     data = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
     stan_data = get_ssp_stan_data(data, names=True)
-    _, samples = fit_model(stan_data, ssp_model)
+    _, samples = fit_model(stan_data, ssp_model, conf)
     samples.draws_pd().to_parquet(POST_PATH / "samples_ssp.parquet")
     post = get_posterior(
         samples, group_names=stan_data["j_names"], group_params=["theta_j"]
@@ -166,7 +166,7 @@ def main():
     for which in ["subtlex", "childes"]:
         data_path = utils.RESULTS_PATH / f"syllables_freq_{which}.parquet"
         data = pl.read_parquet(data_path)
-        _, samples = fit_model(get_freq_stan_data(data, names=True), freq_model)
+        _, samples = fit_model(get_freq_stan_data(data, names=True), freq_model, conf)
         samples.draws_pd().to_parquet(POST_PATH / f"samples_freq_{which}.parquet")
         post = get_posterior(
             samples, group_names=stan_data["j_names"], group_params=["u_1"]
@@ -178,4 +178,5 @@ def main():
 
 
 if __name__ == "__main__":
-    post_ssp, post_freq = main()
+    conf = Conf()
+    post_ssp, post_freq = main(conf)

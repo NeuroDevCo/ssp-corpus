@@ -1,9 +1,7 @@
-#!/usr/bin/env -S uv run --script
-
 """Get pronunciations from Wiktionary."""
 
-from datetime import datetime
-from logging import Logger, ERROR
+import datetime
+import logging
 from pathlib import Path
 
 from rich.console import Console
@@ -11,7 +9,7 @@ from wikipron import Config, scrape
 
 from src import languages
 
-logger = Logger("pyppeteer", ERROR)
+logger = logging.getLogger("pyppeteer")
 
 CON: Console = Console()
 
@@ -34,13 +32,14 @@ def scrape_language(
         delete_empty (bool, optional): Should empty CSV be deleted? Defaults to True.
         **kwargs: Additional arguments passed to `wikipron.Config`.
     """
-    time = datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+    time_fmt = "%Y-%m-%d %H:%M:%S"
+    time = datetime.datetime.strftime(datetime.datetime.now(datetime.UTC), time_fmt)
     lang_label = f"{lang} ({languages.iso639_p3_to_name(lang)})"
     CON.print(f"{lang_label} | [blue]Started[/blue] | {time}")
 
     kw = {"key": lang, "syllable_boundaries": True, "stress": True}
     for idx, mode in enumerate(["narrow", "broad"]):
-        c = Config(**kw, narrow=mode == "narrow", **kwargs)
+        c = Config(**kw, narrow=mode == "narrow", **kwargs)  # ty: ignore[invalid-argument-type]
 
         fn = path / f"{lang}.csv"
         if fn.exists() and idx == 0:

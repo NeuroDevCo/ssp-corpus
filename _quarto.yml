@@ -3,14 +3,51 @@ project:
     - docs/index.qmd
   execute-dir: project
 
-title: "Estimating the cross-linguistic prevalence of the Sonority Sequencing Principle in adult and child-directed speech"
 format:
-  typst: default
-  docx: default
-number-sections: true
+  apaquarto-typst:  
+    floatsintext: true
+    numbered-lines: true
+    number-sections: true
+  apaquarto-docx:  
+    floatsintext: true
+    numbered-lines: true
+    number-sections: true
+
+title: Estimating the cross-linguistic prevalence of the Sonority Sequencing Principle in adult and child-directed speech
+shorttitle: Cross-linguistic prevalence of the Sonority Sequencing Principle
+keywords: [sonority, syllable, language acquisition, phonology, bayesian]
+author-note:
+  disclosures:
+    conflict of interest: |
+      The authors has no conflict of interest to declare.
+    data-sharing: |
+      Raw data, reproducible code, and project documentation are available in the Open Science Framework ([https://osf.io/yeqms]([https://osf.io/yeqms])) and GitHub ([https://github.com/NeuroDevCo/ssp-corpus](https://github.com/NeuroDevCo/ssp-corpus)).
+    financial-support: |
+      This work is supported by the ERC StG 101115991 (GALA) awarded to Chiara Santolin.
+
 bibliography: docs/bibliography.bib
 csl: docs/apa.csl
 
+authors:
+  - name: Gonzalo García-Castro
+    affiliations:
+      - ref: sjd
+    email: gonzalo.garcia@sjd.es
+    orcid: 0000-0002-8553-4209
+    corresponding: true
+
+  - name: Chiara Santolin
+    affiliations:
+      - ref: sjd
+    orcid: 0000-0002-8361-5574
+
+affiliations:
+  - id: sjd
+    name: Institut de Recerca Sant Joan de Déu
+    address: Neurodevelopment and Comparative Cognition, Àrea de Neonatologia, Hospital Sant Joan de Déu, Santa Rosa, 39-57
+    postal-code: 08950
+    region: Barcelona (Spain) 
+    city: Esplugues del Llobregat
 
 echo: false
 warning: false

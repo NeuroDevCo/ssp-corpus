@@ -1,7 +1,6 @@
 from pathlib import Path
 from tempfile import tempdir
 
-
 import polars as pl
 from rich.progress import track
 from wordfreq import zipf_frequency
@@ -34,10 +33,7 @@ def get_frequencies_subtlex(
     temp_file = Path(str(tempdir)) / "frequencies.txt"
     msg = f"FREQS: {len(df):,} words"
     with temp_file.open("w+") as f:
-        f.write(
-            ",".join(["word", "iso639p3code", "freq_subtlex", "freq_subtlex_pmw"])
-            + "\n"
-        )
+        f.write("word,iso639p3code,freq_subtlex,freq_subtlex_pmw\n")
 
         for p1, p3, w in track(df.iter_rows(named=False), msg, len(df)):
             if not p1:

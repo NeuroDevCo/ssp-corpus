@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from iso639 import Language
 import polars as pl
+from iso639 import Language
 from rich.console import Console
 
 from src import utils

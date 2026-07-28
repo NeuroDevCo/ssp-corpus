@@ -1,13 +1,12 @@
 from warnings import warn
 
 import numpy as np
+import polars as pl
 from panphon import FeatureTable
 from panphon.sonority import Sonority
-import polars as pl
 from rich.progress import track
 
 from src import utils
-
 
 FT = FeatureTable()
 SON_ALL = Sonority()
