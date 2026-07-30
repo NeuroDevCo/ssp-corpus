@@ -23,5 +23,5 @@ jobs:
                 uvx ruff format --check .
                 uvx ty check
             - name: Run tests using Pytest
-              run: uvx pytest
+              run: uv pytest
 
