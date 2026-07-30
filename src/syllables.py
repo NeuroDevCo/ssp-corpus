@@ -17,17 +17,18 @@ def classify_segments(x: str, on_missing: str = "warning") -> str | None:
     """
     Classify segments in a word form into consonants (C), vowels (V), and semi-vowels (v).
 
+    This function uses Panphon's segment features to classify segments into consonants and vowels. It loops through each segment in the sequence, and makes the following decissions:
+
+    0) If any of the segments is not found in the Panphon feature table, the syllable is skipped.
+    1) If the segment is syllabic (can act as syllable nucleus), it is classified as a vowel. If the segment is consonantal, it is classified as a consonant. The iteration is finished.
+    2) If the segment is not syllabic nor consonantal, it is considered a glide or semi-vowel. Following Ramus et al. (1999), the following decissions are made in order:
+        2.1) If the segment is the first of the sequence, it is classified as a glide, therefore consonant.
+        2.2) If the segment is the last of the sequence, it is classified as a semi-vowel.
+        2.3) If the previous segment was classified as a vowel, the segment is classified as a semi-vowel.
+        2.4) If the previous segment was classified as a consonant, the segment is classified as a glide, therefore a consonant.
+
     Note:
-        This function uses Panphon's segment features to classify segments into consonants and vowels. It loops through each segment in the sequence, and makes the following decissions:
-
-        0) If any of the segments is not found in the Panphon feature table, the syllable is skipped.
-        1) If the segment is syllabic (can act as syllable nucleus), it is classified as a vowel. If the segment is consonantal, it is classified as a consonant. The iteration is finished.
-        2) If the segment is not syllabic nor consonantal, it is considered a glide or semi-vowel. Following Ramus et al. (1999), the following decissions are made in order:
-            2.1) If the segment is the first of the sequence, it is classified as a glide, therefore consonant.
-            2.2) If the segment is the last of the sequence, it is classified as a semi-vowel.
-            2.3) If the previous segment was classified as a vowel, the segment is classified as a semi-vowel.
-            2.4) If the previous segment was classified as a consonant, the segment is classified as a glide, therefore a consonant.
-
+        Because of the order in which conditions are checked, segments that would normally be classified as consonantal like /n/ may in some contexts be classified as vocalic based on their syllabicity (can act as syllabic nucleus). This is the case for /n/ in English "cotton" /ˈkɒt.n̩/.
 
     Args:
         x (str): Sequence of segments to classify.
@@ -52,24 +53,25 @@ def classify_segments(x: str, on_missing: str = "warning") -> str | None:
             return
 
         elif features.get("syl") == 1:
-            out += "V"
+            out += "V"  # vowel (syllabic nucleus)
 
         elif features.get("cons") == 1:
-            out += "C"
+            out += "C"  # consonant (onset or coda)
 
         else:
             if i == 0:
-                out += "C"
+                out += "C"  # glide (onset or coda)
             elif i == len(x) - 1:
-                out += "v"
+                out += "v"  # semi-vowel (syllabic nucleus as part of diphtong)
             else:
+                # unclear glide/semi-vowel classification, see previous segment
                 prev_features = FT.seg_dict.get(x[i - 1])
                 if prev_features is None:
                     continue
                 elif prev_features.get("syl") == 1:
-                    out += "v"
+                    out += "v"  # after V, semi-vowel
                 else:
-                    out += "C"
+                    out += "C"  # glide otherwise
 
     return out
 
@@ -157,6 +159,9 @@ def get_lang_syllables(
     Returns:
         pl.DataFrame: A Polars dataframe with a syllables database.
     """
+    if len(x) == 0:
+        return
+
     if freq_which:
         if freq_which not in ["subtlex", "childes"]:
             raise ValueError("freq_which must be 'subtlex' or 'childes'")

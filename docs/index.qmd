@@ -262,7 +262,8 @@ The present study was aimed at quantifying the cross-linguistic prevalence of th
     2.2) The present status does not argue in favour or against the universality status of the SSP, but does point to the SSP as a universally available, functionally relevant phonological feature
 4) Limitations:
     4.1) No direct evidence of SSP prevalence in the context of language usage (ideally, we would transcribe and syllabify a corpus and simply calculate the proportion of SSP-following syllables). Currently not possible (few datasets are syllabified).
-    4.2) Althoug the present study includes a relatively large sample of languages from different language families, Indoeuropean (mostly Western) languages are overrepresented in the dataset, paralelling the same pattern observed in corpus analysis in Linguistics. 
+    4.2) Althoug the present study includes a relatively large sample of languages from different language families, Indoeuropean (mostly Western) languages are overrepresented in the dataset, paralelling the same pattern observed in corpus analysis in Linguistics.
+    4.3) The classification of segments into vowels and consonants ignores that in some languages, certain consonantal phonemes can act like syllabic nuclei. This is the case of post-stress /n/ in the English word "cotton" /kɒt.n̩/. 
 5) Conclusions
 
 
