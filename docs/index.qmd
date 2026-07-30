@@ -11,29 +11,30 @@ import polars.selectors as cs
 
 from src import languages, utils, viz
 
+RES = utils.RESULTS_PATH
+POS = RES / "model-posterior"
 
-langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
-w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
-s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
-s_subtlex = pl.read_parquet(utils.RESULTS_PATH / "syllables_freq_subtlex.parquet")
-s_childes = pl.read_parquet(utils.RESULTS_PATH / "syllables_freq_childes.parquet")
+langs = pl.read_parquet(RES / "languages.parquet")
+w = pl.read_parquet(RES / "words.parquet")
+s = pl.read_parquet(RES / "syllables.parquet")
+s_subtlex = pl.read_parquet(RES / "syllables_freq_subtlex.parquet")
+s_childes = pl.read_parquet(RES / "syllables_freq_childes.parquet")
 
-p_ssp = pl.read_parquet(utils.RESULTS_PATH / "model-posterior" / "ssp.parquet")
-p_freq_subtlex = pl.read_parquet(
-    utils.RESULTS_PATH / "model-posterior" / "freq_subtlex.parquet"
-)
-p_freq_childes = pl.read_parquet(
-    utils.RESULTS_PATH / "model-posterior" / "freq_childes.parquet"
-)
+p_ssp = pl.read_parquet(POS / "ssp.parquet")
+p_freq_subtlex = pl.read_parquet(POS / "freq_subtlex.parquet")
+p_freq_childes = pl.read_parquet(POS / "freq_childes.parquet")
 
 w = w.join(langs, on=(set(langs.columns).intersection(w.columns)))
+
 n_words = w.group_by("iso639p3code").len("n_words")
+
 s = s.join(langs, on=(set(langs.columns).intersection(s.columns))).join(
     n_words, on="iso639p3code", how="left"
 )
 s_subtlex = s_subtlex.join(
     langs, on=(set(langs.columns).intersection(s_subtlex.columns))
 ).join(n_words, on="iso639p3code", how="left")
+
 s_childes = s_childes.join(
     langs, on=(set(langs.columns).intersection(s_childes.columns))
 ).join(n_words, on="iso639p3code", how="left")

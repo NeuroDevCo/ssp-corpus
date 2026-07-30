@@ -9,10 +9,7 @@ from rich.console import Console
 from src import languages, model, syllables, viz, words
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        prog="ssp-corpus",
-        description="Preprocess language datasets, models and generate figures.",
-    )
+    parser = argparse.ArgumentParser(prog="ssp-corpus")
 
     parser.add_argument("-l", "--langs", action="store_true")
     parser.add_argument("-w", "--words", action="store_true")
