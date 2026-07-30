@@ -1,5 +1,7 @@
 # ssp-corpus
 
+[![Testing](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml/badge.svg)](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml)
+
 Estimating the prevalence of the Sonority Sequencing Principle (SSP) across languages.
 
 ## Pre-requisites
