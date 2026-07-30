@@ -12,7 +12,6 @@ dependencies = [
     "h5netcdf>=1.8.1",
     "ipyleaflet>=0.20.0",
     "jupyter>=1.1.1",
-    "langcodes>=3.5.1",
     "language-data>=1.4.0",
     "lingtypology>=0.8.6",
     "matplotlib>=3.10.8",
@@ -21,7 +20,6 @@ dependencies = [
     "panphon>=0.22.2",
     "polars>=1.38.1",
     "pyarrow>=23.0.1",
-    "pytest>=9.0.2",
     "python-iso639>=2026.1.31",
     "quarto>=0.1.0",
     "rich>=14.3.3",
@@ -33,7 +31,10 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["ruff>=0.15.6"]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.15.6",
+]
 
 [build-system]
 requires = ["uv_build"]
