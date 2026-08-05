@@ -59,10 +59,11 @@ def get_frequencies_childes(
     file: Path = Path("out/frequencies-childes.parquet"),
 ):
     return (
-        pl.read_parquet(file)
+        pl.scan_parquet(file)
         .rename({"lang": "iso639p3code", "freq": "freq_childes"})
         .with_columns(freq_childes_pmw=10 ** (pl.col("freq_childes") - 3))
         .sort(pl.col(["iso639p3code", "freq_childes"]))
+        .collect()
     )
 
 
