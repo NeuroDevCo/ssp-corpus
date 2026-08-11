@@ -180,7 +180,7 @@ data/
 *.csv
 *.png
 **/*.quarto_ipynb
-
+**/*.nc
 
 /results/*.parquet
 /results/childes-freqs/

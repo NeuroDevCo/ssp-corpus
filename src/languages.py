@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import polars as pl
-from iso639 import Language
 from rich.console import Console
 
 from src import utils
@@ -72,38 +71,6 @@ def get_languages(
     df.write_parquet(Path(file))
 
     return df
-
-
-def iso639_p3_to_p1(p3: str):
-    try:
-        lang = Language.from_part3(p3)
-        return str(lang.part1)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
-def iso639_p1_to_p3(p1: str):
-    try:
-        lang = Language.from_part1(p1)
-        return str(lang.part3)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
-def iso639_p3_to_name(p3: str):
-    try:
-        lang = Language.from_part3(p3)
-        return str(lang.name)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
-def iso639_name_to_p3(name: str):
-    try:
-        lang = Language.from_name(name)
-        return str(lang.part3)
-    except (LookupError, ValueError, AttributeError):
-        return
 
 
 def main():

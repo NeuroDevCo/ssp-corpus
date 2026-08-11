@@ -147,9 +147,7 @@ def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = False) -> bool:
     return True
 
 
-def get_lang_syllables(
-    x: pl.DataFrame, freq_which: str | None = None
-) -> pl.DataFrame | None:
+def get_lang_syllables(x: pl.DataFrame, freq: bool = True) -> pl.DataFrame | None:
     """
     Get syllables from a words database.
 
@@ -162,11 +160,8 @@ def get_lang_syllables(
     if len(x) == 0:
         return
 
-    if freq_which:
-        if freq_which not in ["subtlex", "childes"]:
-            raise ValueError("freq_which must be 'subtlex' or 'childes'")
-
-        x = x.filter(pl.col(f"freq_{freq_which}_pmw").is_not_null())
+    if freq:
+        x = x.filter(pl.col("freq_pmw").is_not_null())
 
     df = (
         x.explode("syll")
@@ -179,11 +174,11 @@ def get_lang_syllables(
         .filter(pl.col("struct").str.count_matches("V") == 1)
     )
 
-    if freq_which:
+    if freq:
         df = (
             df.group_by(["iso639p3code", "syll", "struct"])
-            .agg(pl.col(f"freq_{freq_which}_pmw").sum())
-            .with_columns(freq=(pl.col(f"freq_{freq_which}_pmw") + 0.01).log10() + 3)
+            .agg(pl.col("freq_pmw").sum())
+            .with_columns(freq=(pl.col("freq_pmw") + 0.01).log10() + 3)
         )
     else:
         df = df.unique(["syll"])
@@ -201,7 +196,7 @@ def get_lang_syllables(
 
 
 def get_syllables(
-    words: pl.DataFrame, min_syll: int = 100, freq_which: str | None = None
+    words: pl.DataFrame, min_syll: int = 100, freq: bool = True
 ) -> pl.DataFrame:
     """Main script."""
 
@@ -211,7 +206,7 @@ def get_syllables(
     msg = f"SYLLABLES: {len(part_words):,} languages"
     for lang_words in track(part_words, msg, len(part_words)):
         try:
-            df = get_lang_syllables(lang_words, freq_which=freq_which)
+            df = get_lang_syllables(lang_words, freq=freq)
             if df is None or len(df) < min_syll:
                 continue
             syll.append(df)
@@ -227,9 +222,8 @@ def get_syllables(
 
     fn = "syllables"
 
-    if freq_which:
+    if freq:
         cols_keep += ["freq"]
-        fn += f"_freq_{freq_which}"
 
     syll = syll.sort(["iso639p3code", "syll"]).select(cols_keep)
     syll.write_parquet((utils.RESULTS_PATH / fn).with_suffix(".parquet"))
@@ -240,12 +234,8 @@ def get_syllables(
 def main():
     w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
 
-    return (
-        get_syllables(w),
-        get_syllables(w, freq_which="subtlex"),
-        get_syllables(w, freq_which="childes"),
-    )
+    return get_syllables(w)
 
 
 if __name__ == "__main__":
-    s, s_freq_a, s_freq_c = main()
+    s = main()
