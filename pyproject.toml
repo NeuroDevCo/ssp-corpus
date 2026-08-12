@@ -10,7 +10,6 @@ dependencies = [
     "arviz-plots>=1.2.0",
     "arviz-stats>=1.2.0",
     "basemap==2.0.0",
-    "cmdstanpy>=1.3.0",
     "epitran>=1.35.2",
     "graphviz>=0.21",
     "great-tables>=0.22.0",
