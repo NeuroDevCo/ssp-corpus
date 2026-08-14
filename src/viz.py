@@ -8,7 +8,7 @@ import polars as pl
 import xarray as xr
 from great_tables import GT, nanoplot_options
 from iso639 import Language
-from matplotlib import colors, gridspec
+from matplotlib import colors
 from matplotlib import pyplot as plt
 
 from src import utils
@@ -167,32 +167,20 @@ def table_examples():
     return tbl
 
 
-def plot_model(
-    file: Path = utils.RESULTS_PATH / "post-freq.nc", path: Path | None = None
-):
-    data = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
+def plot_model_langs(data: pl.DataFrame, post: xr.DataArray):
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
-
-    idata = az.from_netcdf(file, engine="netcdf4")
-    post = az.convert_to_dataset(idata.posterior).stack(sample=("chain", "draw"))
-
-    fig = plt.Figure(figsize=(10, 8))
-    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 1], width_ratios=[1, 1])
-
-    ax0 = fig.add_subplot(gs[0, :])
-    ax1 = fig.add_subplot(gs[1, 0])
-    ax2 = fig.add_subplot(gs[1, 1])
-
-    # plot languages
     langs = 1 / (1 + (np.exp(-(post.α + post.u))))
     hdi = langs.quantile([0.025, 0.105, 0.5, 0.895, 0.975], dim="sample")
+    n_obs = data.group_by("iso639p3code").len()
 
-    for li in hdi.argsort().sel(quantile=0.5):
+    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    for li in (-hdi).argsort().sel(quantile=0.5):
         l = langs.j.values[li]
         h = hdi.sel(j=l)
+        n = n_obs.filter(pl.col("iso639p3code") == l).get_column("len")
         d = ssp.filter(pl.col("iso639p3code") == l).get_column("is_ssp")
-        lang_label = iso639_p3_to_name(l)
-        ax0.vlines(
+        lang_label = f"{iso639_p3_to_name(l)} ($n$={n[0]:,})"
+        ax.hlines(
             lang_label,
             h.sel(quantile=0.025),
             h.sel(quantile=0.975),
@@ -201,7 +189,7 @@ def plot_model(
             alpha=0.5,
             zorder=-1,
         )
-        ax0.vlines(
+        ax.hlines(
             lang_label,
             h.sel(quantile=0.105),
             h.sel(quantile=0.895),
@@ -210,21 +198,24 @@ def plot_model(
             alpha=0.5,
             zorder=-1,
         )
-        ax0.scatter(lang_label, h.sel(quantile=0.5), c="k", s=50, marker="x")
-        ax0.scatter(lang_label, d, edgecolor="k", s=50, facecolors="none")
+        ax.scatter(h.sel(quantile=0.5), lang_label, c="k", s=50, marker="x")
+        ax.scatter(d, lang_label, edgecolor="k", s=50, facecolors="none")
 
-    ax0.tick_params("x", rotation=90)
-    ax0.set_title(
-        "A) Observed (○) and model-predicted (×) SSP-compliance across languages"
-    )
-    ax0.set_ylabel("Probability of SSP-compliance")
-    ax0.grid(which="major", axis="y", linestyle="dotted")
+    ax.set_title("Observed (○) and model-predicted (×) SSP-compliance")
+    ax.set_xlabel("Probability of SSP-compliance")
+    ax.grid(which="major", axis="x", linestyle="dotted")
 
-    # plot β posterior distribution
+    fig.tight_layout()
+    fig.savefig(utils.IMG_PATH / "model-langs.png", dpi=DPI)
+
+
+def plot_model_params(post: xr.DataArray, ax: plt.Axes):
+
     post_delta = post.β / 4
     y = 1300
     hdi = post_delta.quantile([0.025, 0.105, 0.5, 0.895, 0.975])
-    ax1.hlines(
+
+    ax.hlines(
         y,
         hdi.sel(quantile=0.105),
         hdi.sel(quantile=0.895),
@@ -233,7 +224,7 @@ def plot_model(
         alpha=0.5,
         zorder=-1,
     )
-    ax1.hlines(
+    ax.hlines(
         y,
         hdi.sel(quantile=0.025),
         hdi.sel(quantile=0.975),
@@ -242,63 +233,97 @@ def plot_model(
         alpha=0.5,
         zorder=-1,
     )
-    ax1.scatter(
-        hdi.sel(quantile=0.5), y, s=100, zorder=0, edgecolor="k", facecolors="none"
-    )
-    ax1.hist(post_delta, bins=25, edgecolor="w", linewidth=1, color="lightgrey")
-    ax1.axvline(0, lw=1, ls="dashed", c="k")
-    ax1.set_ylabel("Number of posterior draws")
-    ax1.set_axisbelow(True)
-    ax1.set_title("B) Frequency effect ($\\beta_1 / 4$)")
-    ax1.set_xlabel("Difference in probability of SSP compliance")
-    ax1.grid(which="both", axis="x", linestyle="dotted")
+    ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c="k", marker="x")
+    ax.hist(post_delta, bins=25, edgecolor="w", linewidth=1, color="lightgrey")
+    ax.axvline(0, lw=1, ls="dashed", c="k")
+    ax.set_ylim(0, y + (y * 0.1))
+    ax.set_ylabel("Number of posterior draws")
+    ax.set_axisbelow(True)
+    ax.set_title("A) Frequency effect ($\\beta_1 / 4$)")
+    ax.set_xlabel("Difference in probability of SSP compliance")
+    ax.grid(which="both", axis="x", linestyle="dotted")
 
-    # plot predictions
+
+def plot_model_preds(post: xr.DataArray, data: pl.DataFrame, ax: plt.Axes):
     x_nd = np.linspace(1, 9, 100)
     x_raw = data["freq"].to_numpy()
     x = xr.DataArray((x_nd - x_raw.mean()) / x_raw.std(), dims=["x"])
     y = 1 / (1 + (np.exp(-(post.α + post.β * x))))
-    hdi = y.quantile([0.025, 0.105, 0.5, 0.895, 0.975], dim="sample")
+    hdi = y.quantile([0.5], dim="sample")
 
-    ax2.fill_between(
-        x,
-        hdi.sel(quantile=0.025),
-        hdi.sel(quantile=0.975),
-        alpha=0.5,
-        color="orange",
-        edgecolor="w",
-    )
-    ax2.fill_between(
-        x,
-        hdi.sel(quantile=0.105),
-        hdi.sel(quantile=0.895),
-        alpha=0.5,
-        color="orange",
-        edgecolor="w",
-    )
+    y_lang = 1 / (1 + (np.exp(-((post.α + post.u) + (post.β + post.w) * x))))
+    hdi_lang = y_lang.quantile(0.5, dim="sample")
 
-    ax2.plot(x, hdi.sel(quantile=0.5), c="k", lw=2)
+    ax.plot(x, hdi.sel(quantile=0.5), c="k", lw=2)
+
+    for l in hdi_lang.j.values:
+        ax.plot(x, hdi_lang.sel(j=l), alpha=1 / 4, color="orange")
 
     tick_labels = np.arange(1, 9)
     ticks = (tick_labels - x_raw.mean()) / x_raw.std()
-    ax2.set_title("C) Model-predicted SSP compliance")
-    ax2.set_xlabel("Lexical frequency (Zipf score)")
-    ax2.set_xticks(ticks)
-    ax2.set_xticklabels(tick_labels)
-    ax2.set_xlabel("Syllabic frequency (Zipf score)")
-    ax2.set_ylabel("Probability of SSP-compliance")
-    ax2.grid(which="major", axis="both", linestyle="dotted")
-    ax2.set_axisbelow(True)
+    ax.set_title("B) Model-predicted SSP compliance")
+    ax.set_xlabel("Lexical frequency (Zipf score)")
+    ax.set_xticks(ticks)
+    ax.set_xticklabels(tick_labels)
+    ax.set_xlabel("Syllabic frequency (Zipf score)")
+    ax.set_ylabel("Probability of SSP-compliance")
+    ax.grid(which="major", axis="both", linestyle="dotted")
+    ax.set_axisbelow(True)
+
+
+def plot_model_random(post: xr.DataArray, ax: plt.Axes):
+    u = 1 / (1 + (np.exp(-(post.α + post.u).mean("sample"))))
+    w = (post.β + post.w).mean("sample") / 4
+
+    ax.axhline(1 / (1 + (np.exp(-(post.α.mean("sample"))))), lw=2, c="orange")
+    ax.axvline(post.β.mean("sample") / 4, lw=2, c="orange")
+    ax.axvline(0, ls="dotted", c="k")
+
+    ax.scatter(x=w, y=u, color="k", marker="x")
+
+    for j in post.j.values:
+        x, y = u.sel(j=j), w.sel(j=j)
+        ax.annotate(
+            j,
+            xy=(x, y),
+            xycoords="data",
+            xytext=(0.36, 0.68),
+            textcoords="axes fraction",
+            arrowprops={"facecolor": "black", "shrink": 0.05},
+            horizontalalignment="right",
+            verticalalignment="top",
+        )
+    ax.set_ylabel("Probability of SSP compliance ($\\alpha_j$)")
+    ax.set_xlabel("Frequency effect ($\\beta_j$)")
+    ax.set_title("C) SSP compliance and frequency effect")
+
+
+def plot_model(data: pl.DataFrame, post: xr.DataArray, path: Path | None = None):
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    plot_model_params(post, axes[0])  # plot β posterior distribution
+    plot_model_preds(post, data, axes[1])  # plot predictions
+    plot_model_random(post, axes[2])
 
     fig.tight_layout()
+    fig.set_size_inches(15, 5)
     if path:
         fig.savefig(path, dpi=DPI)
 
 
-def main():
+def main(
+    data_path: Path = utils.RESULTS_PATH / "syllables.parquet",
+    post_path: Path = utils.RESULTS_PATH / "post-freq.nc",
+):
+    data = pl.read_parquet(data_path)
+    idata = az.from_netcdf(post_path, engine="netcdf4")
+    post = az.convert_to_dataset(idata.posterior).stack(sample=("chain", "draw"))
+
     # table_examples()
     # plot_ssp_examples()
-    plot_model(path=utils.IMG_PATH / "model-posterior.png")
+    # plot_model_langs(data, post)
+    plot_model(data, post, path=utils.IMG_PATH / "model-posterior.png")
     # plot_model(
     #     file=utils.RESULTS_PATH / "no-flat" / "post-freq.nc",
     #     path=utils.IMG_PATH / "model-posterior-noflat.png",

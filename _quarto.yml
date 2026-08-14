@@ -7,14 +7,12 @@ format:
   apaquarto-typst:  
     floatsintext: true
     numbered-lines: true
-    number-sections: true
   apaquarto-docx:  
     floatsintext: true
     numbered-lines: true
-    number-sections: true
 
-title: Estimating the cross-linguistic prevalence of the Sonority Sequencing Principle in adult and child-directed speech
-shorttitle: Cross-linguistic prevalence of the Sonority Sequencing Principle
+title: Estimating the cross-linguistic prevalence of the Sonority Sequencing Principle
+shorttitle: Prevalence of Sonority Sequencing Principle
 keywords: [sonority, syllable, language acquisition, phonology, bayesian]
 author-note:
   disclosures:
@@ -40,6 +38,7 @@ authors:
     affiliations:
       - ref: sjd
     orcid: 0000-0002-8361-5574
+    email: chiara.santolin@sjd.es
 
 affiliations:
   - id: sjd

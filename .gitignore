@@ -181,6 +181,7 @@ data/
 *.png
 **/*.quarto_ipynb
 **/*.nc
+**/**/*.nc
 
 /results/*.parquet
 /results/childes-freqs/
