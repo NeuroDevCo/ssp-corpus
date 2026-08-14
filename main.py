@@ -36,8 +36,7 @@ if __name__ == "__main__":
 
     if args.model:
         con.rule("Fitting Bayesian models")
-        conf = model.Conf()
-        post_ssp, post_freq = model.main(conf)
+        model.main()
 
     if args.viz:
         con.rule("Making figures")

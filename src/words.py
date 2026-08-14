@@ -2,15 +2,24 @@ import tempfile
 from pathlib import Path
 
 import polars as pl
+from iso639 import Language
 from rich.progress import track
 from wordfreq import zipf_frequency
 
 from src import languages, utils
 
 
+def iso639_p3_to_p1(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.part1)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
 @utils.benchmark
-def get_frequencies_subtlex(
-    x: pl.DataFrame, file: Path = Path("out/frequencies.parquet")
+def get_frequencies(
+    x: pl.DataFrame, file: Path = utils.RESULTS_PATH / "frequencies.parquet"
 ):
     if file.exists():
         return pl.read_parquet(file)
@@ -18,9 +27,7 @@ def get_frequencies_subtlex(
     if len(x) == 0:
         return
 
-    langs_lookup = {
-        p3: languages.iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())
-    }
+    langs_lookup = {p3: iso639_p3_to_p1(p3) for p3 in set(x["iso639p3code"].to_list())}
 
     df = (
         x.with_columns(
@@ -35,7 +42,7 @@ def get_frequencies_subtlex(
         msg = f"FREQS: {len(df):,} words"
 
         with temp_file.open("w+") as f:
-            f.write("word,iso639p3code,freq_subtlex,freq_subtlex_pmw\n")
+            f.write("word,iso639p3code,freq,freq_pmw\n")
 
             for p1, p3, w in track(df.iter_rows(named=False), msg, len(df)):
                 if not p1:
@@ -50,32 +57,10 @@ def get_frequencies_subtlex(
                 data = ",".join([w, p3, str(freq), str(freq_pmw) if freq else ""])
                 f.write(data + "\n")
 
-        df = pl.read_csv(temp_file).sort(pl.col(["iso639p3code", "freq_subtlex"]))
+        df = pl.read_csv(temp_file).sort(pl.col(["iso639p3code", "freq"]))
         df.write_parquet(file)
+
     return df
-
-
-def get_frequencies_childes(
-    file: Path = Path("out/frequencies-childes.parquet"),
-):
-    return (
-        pl.scan_parquet(file)
-        .rename({"lang": "iso639p3code", "freq": "freq_childes"})
-        .with_columns(freq_childes_pmw=10 ** (pl.col("freq_childes") - 3))
-        .sort(pl.col(["iso639p3code", "freq_childes"]))
-        .collect()
-    )
-
-
-@utils.benchmark
-def get_frequencies(which: str = "subtlex", **kwargs):
-    if which not in ["subtlex", "childes"]:
-        raise ValueError("which must be 'subtlex' or 'childes'")
-
-    if which == "subtlex":
-        return get_frequencies_subtlex(**kwargs)
-
-    return get_frequencies_childes(**kwargs)
 
 
 def get_lang_words(
@@ -147,16 +132,10 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
 
     words = pl.concat(words) if len(words) > 0 else pl.DataFrame()
 
-    freqs_subtlex = get_frequencies(which="subtlex", x=words)
+    freqs = get_frequencies(x=words)
 
-    on = list(set(words.columns).intersection(freqs_subtlex.columns))
-    words = words.join(freqs_subtlex, on=on, how="left").join(
-        langs.select("iso639p3code"), on="iso639p3code", how="left"
-    )
-
-    freqs_childes = get_frequencies(which="childes")
-    on = list(set(words.columns).intersection(freqs_childes.columns))
-    words = words.join(freqs_childes, on=on, how="left").join(
+    on = list(set(words.columns).intersection(freqs.columns))
+    words = words.join(freqs, on=on, how="left").join(
         langs.select("iso639p3code"), on="iso639p3code", how="left"
     )
 
@@ -167,6 +146,7 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
 
 def main():
     langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
+
     return get_words(langs)
 
 
