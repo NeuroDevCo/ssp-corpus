@@ -173,7 +173,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray):
     hdi = langs.quantile([0.025, 0.105, 0.5, 0.895, 0.975], dim="sample")
     n_obs = data.group_by("iso639p3code").len()
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+    fig, ax = plt.subplots(1, 1, figsize=(8, 9))
     for li in (-hdi).argsort().sel(quantile=0.5):
         l = langs.j.values[li]
         h = hdi.sel(j=l)
@@ -212,14 +212,14 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray):
 def plot_model_params(post: xr.DataArray, ax: plt.Axes):
 
     post_delta = post.β / 4
-    y = 1300
+    y = 2100
     hdi = post_delta.quantile([0.025, 0.105, 0.5, 0.895, 0.975])
 
     ax.hlines(
         y,
         hdi.sel(quantile=0.105),
         hdi.sel(quantile=0.895),
-        lw=20,
+        lw=15,
         colors=["orange"],
         alpha=0.5,
         zorder=-1,
@@ -228,13 +228,13 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
         y,
         hdi.sel(quantile=0.025),
         hdi.sel(quantile=0.975),
-        lw=20,
+        lw=15,
         colors=["orange"],
         alpha=0.5,
         zorder=-1,
     )
     ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c="k", marker="x")
-    ax.hist(post_delta, bins=25, edgecolor="w", linewidth=1, color="lightgrey")
+    ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color="k")
     ax.axvline(0, lw=1, ls="dashed", c="k")
     ax.set_ylim(0, y + (y * 0.1))
     ax.set_ylabel("Number of posterior draws")
@@ -295,19 +295,19 @@ def plot_model_random(post: xr.DataArray, ax: plt.Axes):
         )
     ax.set_ylabel("Probability of SSP compliance ($\\alpha_j$)")
     ax.set_xlabel("Frequency effect ($\\beta_j$)")
-    ax.set_title("C) SSP compliance and frequency effect")
+    ax.set_title("C) Random effect correlation")
 
 
 def plot_model(data: pl.DataFrame, post: xr.DataArray, path: Path | None = None):
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(10, 4))
 
     plot_model_params(post, axes[0])  # plot β posterior distribution
     plot_model_preds(post, data, axes[1])  # plot predictions
     plot_model_random(post, axes[2])
 
     fig.tight_layout()
-    fig.set_size_inches(15, 5)
+    fig.set_size_inches(9, 3)
     if path:
         fig.savefig(path, dpi=DPI)
 
@@ -322,7 +322,7 @@ def main(
 
     # table_examples()
     # plot_ssp_examples()
-    # plot_model_langs(data, post)
+    plot_model_langs(data, post)
     plot_model(data, post, path=utils.IMG_PATH / "model-posterior.png")
     # plot_model(
     #     file=utils.RESULTS_PATH / "no-flat" / "post-freq.nc",
