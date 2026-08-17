@@ -183,11 +183,14 @@ data/
 **/*.nc
 **/**/*.nc
 
+
 /results/*.parquet
 /results/childes-freqs/
 /results/model-posterior/
 /docs/index_files/
 /docs/dashboard_files/
+/docs/*.pdf
+/docs/*.docx
 _freeze/
 docs/*_files/
 
