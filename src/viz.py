@@ -16,6 +16,7 @@ from src.utils import IMG_PATH
 
 COLOR = "darkslategrey"
 DPI = 1200
+QUANT = [0.025, 0.105, 0.5, 0.895, 0.975]
 
 
 def iso639_p3_to_name(p3: str):
@@ -167,23 +168,45 @@ def table_examples():
     return tbl
 
 
-def plot_model_langs(data: pl.DataFrame, post: xr.DataArray):
+def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
     langs = 1 / (1 + (np.exp(-(post.α + post.u))))
-    hdi = langs.quantile([0.025, 0.105, 0.5, 0.895, 0.975], dim="sample")
+    alpha = 1 / (1 + (np.exp(-(post.α)))).quantile(QUANT, dim="sample")
+
+    hdi = langs.quantile(QUANT, dim="sample")
     n_obs = data.group_by("iso639p3code").len()
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 9))
+
+    ax.axvspan(
+        alpha.sel(quantile=QUANT[0]),
+        alpha.sel(quantile=QUANT[-1]),
+        color="darkslategrey",
+        alpha=0.5,
+        lw=0,
+        zorder=-1,
+    )
+    ax.axvspan(
+        alpha.sel(quantile=QUANT[1]),
+        alpha.sel(quantile=QUANT[-2]),
+        color="darkslategrey",
+        alpha=0.5,
+        lw=0,
+        zorder=-1,
+    )
+    ax.axvline(alpha.sel(quantile=0.5), c="darkslategrey", zorder=-1)
+
     for li in (-hdi).argsort().sel(quantile=0.5):
         l = langs.j.values[li]
         h = hdi.sel(j=l)
         n = n_obs.filter(pl.col("iso639p3code") == l).get_column("len")
         d = ssp.filter(pl.col("iso639p3code") == l).get_column("is_ssp")
         lang_label = f"{iso639_p3_to_name(l)} ($n$={n[0]:,})"
+
         ax.hlines(
             lang_label,
-            h.sel(quantile=0.025),
-            h.sel(quantile=0.975),
+            h.sel(quantile=QUANT[0]),
+            h.sel(quantile=QUANT[-1]),
             colors=["orange"],
             lw=10,
             alpha=0.5,
@@ -191,34 +214,36 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray):
         )
         ax.hlines(
             lang_label,
-            h.sel(quantile=0.105),
-            h.sel(quantile=0.895),
+            h.sel(quantile=QUANT[1]),
+            h.sel(quantile=QUANT[-2]),
             colors=["orange"],
             lw=10,
             alpha=0.5,
             zorder=-1,
         )
-        ax.scatter(h.sel(quantile=0.5), lang_label, c="k", s=50, marker="x")
-        ax.scatter(d, lang_label, edgecolor="k", s=50, facecolors="none")
+        ax.scatter(h.sel(quantile=0.5), lang_label, c="darkslategrey", s=50, marker="x")
+        ax.scatter(d, lang_label, edgecolor="darkslategrey", s=50, facecolors="none")
 
     ax.set_title("Observed (○) and model-predicted (×) SSP-compliance")
     ax.set_xlabel("Probability of SSP-compliance")
     ax.grid(which="major", axis="x", linestyle="dotted")
 
     fig.tight_layout()
-    fig.savefig(utils.IMG_PATH / "model-langs.png", dpi=DPI)
+
+    if path:
+        fig.savefig(path, dpi=DPI)
 
 
 def plot_model_params(post: xr.DataArray, ax: plt.Axes):
 
     post_delta = post.β / 4
     y = 2100
-    hdi = post_delta.quantile([0.025, 0.105, 0.5, 0.895, 0.975])
+    hdi = post_delta.quantile(QUANT)
 
     ax.hlines(
         y,
-        hdi.sel(quantile=0.105),
-        hdi.sel(quantile=0.895),
+        hdi.sel(quantile=QUANT[1]),
+        hdi.sel(quantile=QUANT[-2]),
         lw=15,
         colors=["orange"],
         alpha=0.5,
@@ -226,16 +251,16 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
     )
     ax.hlines(
         y,
-        hdi.sel(quantile=0.025),
-        hdi.sel(quantile=0.975),
+        hdi.sel(quantile=QUANT[0]),
+        hdi.sel(quantile=QUANT[-1]),
         lw=15,
         colors=["orange"],
         alpha=0.5,
         zorder=-1,
     )
-    ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c="k", marker="x")
-    ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color="k")
-    ax.axvline(0, lw=1, ls="dashed", c="k")
+    ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c="darkslategrey", marker="x")
+    ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color="darkslategrey")
+    ax.axvline(0, lw=1, ls="dashed", c="darkslategrey")
     ax.set_ylim(0, y + (y * 0.1))
     ax.set_ylabel("Number of posterior draws")
     ax.set_axisbelow(True)
@@ -249,12 +274,28 @@ def plot_model_preds(post: xr.DataArray, data: pl.DataFrame, ax: plt.Axes):
     x_raw = data["freq"].to_numpy()
     x = xr.DataArray((x_nd - x_raw.mean()) / x_raw.std(), dims=["x"])
     y = 1 / (1 + (np.exp(-(post.α + post.β * x))))
-    hdi = y.quantile([0.5], dim="sample")
+    hdi = y.quantile(QUANT, dim="sample")
 
     y_lang = 1 / (1 + (np.exp(-((post.α + post.u) + (post.β + post.w) * x))))
     hdi_lang = y_lang.quantile(0.5, dim="sample")
 
-    ax.plot(x, hdi.sel(quantile=0.5), c="k", lw=2)
+    ax.fill_between(
+        x,
+        hdi.sel(quantile=QUANT[0]),
+        hdi.sel(quantile=QUANT[-1]),
+        color="darkslategrey",
+        lw=0,
+        alpha=0.5,
+    )
+    ax.fill_between(
+        x,
+        hdi.sel(quantile=QUANT[1]),
+        hdi.sel(quantile=QUANT[-2]),
+        color="darkslategrey",
+        lw=0,
+        alpha=0.5,
+    )
+    ax.plot(x, hdi.sel(quantile=0.5), c="darkslategrey", lw=2)
 
     for l in hdi_lang.j.values:
         ax.plot(x, hdi_lang.sel(j=l), alpha=1 / 4, color="orange")
@@ -277,9 +318,9 @@ def plot_model_random(post: xr.DataArray, ax: plt.Axes):
 
     ax.axhline(1 / (1 + (np.exp(-(post.α.mean("sample"))))), lw=2, c="orange")
     ax.axvline(post.β.mean("sample") / 4, lw=2, c="orange")
-    ax.axvline(0, ls="dotted", c="k")
+    ax.axvline(0, ls="dotted", c="darkslategrey")
 
-    ax.scatter(x=w, y=u, color="k", marker="x")
+    ax.scatter(x=w, y=u, color="darkslategrey", marker="x")
 
     for j in post.j.values:
         x, y = u.sel(j=j), w.sel(j=j)
@@ -315,6 +356,7 @@ def plot_model(data: pl.DataFrame, post: xr.DataArray, path: Path | None = None)
 def main(
     data_path: Path = utils.RESULTS_PATH / "syllables.parquet",
     post_path: Path = utils.RESULTS_PATH / "post-freq.nc",
+    img_path: Path = utils.IMG_PATH,
 ):
     data = pl.read_parquet(data_path)
     idata = az.from_netcdf(post_path, engine="netcdf4")
@@ -322,8 +364,8 @@ def main(
 
     # table_examples()
     # plot_ssp_examples()
-    plot_model_langs(data, post)
-    plot_model(data, post, path=utils.IMG_PATH / "model-posterior.png")
+    plot_model_langs(data, post, path=img_path / "model-langs.png")
+    plot_model(data, post, path=img_path / "model-posterior.png")
     # plot_model(
     #     file=utils.RESULTS_PATH / "no-flat" / "post-freq.nc",
     #     path=utils.IMG_PATH / "model-posterior-noflat.png",
@@ -332,3 +374,10 @@ def main(
 
 if __name__ == "__main__":
     main()
+
+    noflat_path = utils.RESULTS_PATH / "no-flat"
+    main(
+        data_path=noflat_path / "syllables.parquet",
+        post_path=noflat_path / "post-freq.nc",
+        img_path=utils.IMG_PATH / "no-flat",
+    )
