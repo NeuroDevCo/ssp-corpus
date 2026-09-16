@@ -6,7 +6,7 @@ from pathlib import Path
 import quarto
 from rich.console import Console
 
-from src import languages, model, syllables, viz, words
+from src import languages, model, syllables, utils, viz, words
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="ssp-corpus")
@@ -36,11 +36,32 @@ if __name__ == "__main__":
 
     if args.model:
         con.rule("Fitting Bayesian models")
-        model.main()
+        model.main(
+            utils.RESULTS_PATH,
+            target_accept=0.99,
+            draws=2000,
+            tune=2000,
+            chains=8,
+            cores=8,
+        )
+        model.main(
+            utils.RESULTS_PATH / "no-flat",
+            target_accept=0.99,
+            draws=2000,
+            tune=2000,
+            chains=8,
+            cores=8,
+        )
 
     if args.viz:
         con.rule("Making figures")
         viz.main()
+        p = utils.RESULTS_PATH / "no-flat"
+        viz.main(
+            data_path=p / "syllables.parquet",
+            post_path=p / "post-freq.nc",
+            img_path=utils.IMG_PATH / "no-flat",
+        )
 
     if args.docs:
         con.rule("Rendering documents")
