@@ -11,12 +11,43 @@ from iso639 import Language
 from matplotlib import colors
 from matplotlib import pyplot as plt
 
-from src import utils
+from src import languages, utils
 from src.utils import IMG_PATH
 
-COLOR = "darkslategrey"
+COLOR = "grey"
+COLOR2 = "lightgrey"
 DPI = 1200
 QUANT = [0.025, 0.105, 0.5, 0.895, 0.975]
+
+
+def get_color_codes(
+    x: list[str], cmap: str = "rainbow", alpha: float = 1.0
+) -> dict[str, str]:
+    """Assign color to each language family.
+
+    Args:
+        x (list[str]): Language families.
+        cmap (str, optional): Color map to use. Defaults to "rainbow".
+        alpha (float, optional): Opacity of the colors. Defaults to 1.0 (full opacity).
+
+    Returns:
+        dict: Language family and hex color pairs.
+    """
+
+    cm = plt.get_cmap(cmap)
+    vals = cm(np.linspace(0, 1, len(x)), alpha=alpha)
+
+    return {k: colors.rgb2hex(v, keep_alpha=True) for k, v in zip(x, vals)}
+
+
+data_path: Path = utils.RESULTS_PATH / "syllables.parquet"
+data = pl.read_parquet(data_path)
+families = languages.get_languages().select(["iso639p3code", "family_id"])
+families = {k: v for k, v in families.iter_rows()}
+ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
+
+CLRS = get_color_codes(list({families[l] for l in ssp["iso639p3code"]}), cmap="tab10")
+CLRS = {k: CLRS[v] for k, v in families.items() if k in ssp["iso639p3code"]}
 
 
 def iso639_p3_to_name(p3: str):
@@ -29,7 +60,7 @@ def iso639_p3_to_name(p3: str):
 
 def plot_ssp_examples():
     word_ex = {"/kɹɪsp/": [1, 7, 8, 3, 1], "/snæps/": [3, 5, 9, 1, 3]}
-    colors = ["darkslategrey", "grey"]
+    colors = [COLOR, "grey"]
     legend = ["/kɹɪsp/ (SSP-following)", "/snæps/ (SSP-violating)"]
     fig, ax = plt.subplots(1, 1)
 
@@ -66,30 +97,6 @@ def plot_ssp_examples():
     fig.set_size_inches(6, 2.5)
     fig.legend(frameon=False, fontsize=7, loc="upper right")
     fig.savefig(IMG_PATH / "ssp-examples.png", dpi=DPI)
-
-
-def get_color_codes(cmap: str = "rainbow", alpha: float = 1.0) -> dict[str, str]:
-    """Assign color to each language family.
-
-    Args:
-        x (list[str]): Language families.
-        cmap (str, optional): Color map to use. Defaults to "rainbow".
-        alpha (float, optional): Opacity of the colors. Defaults to 1.0 (full opacity).
-
-    Returns:
-        dict: Language family and hex color pairs.
-    """
-    langs = (
-        pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
-        .unique("family_id")
-        .select("family_id")
-        .sort("family_id")
-    )
-    f = langs.get_column("family_id").sort().to_list()
-    cm = plt.get_cmap(cmap)
-    vals = cm(np.linspace(0, 1, len(f)), alpha=alpha)
-
-    return {k: colors.rgb2hex(v, keep_alpha=True) for k, v in zip(f, vals)}
 
 
 def table_examples():
@@ -170,64 +177,80 @@ def table_examples():
 
 def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
+
     langs = 1 / (1 + (np.exp(-(post.α + post.u))))
     alpha = 1 / (1 + (np.exp(-(post.α)))).quantile(QUANT, dim="sample")
 
     hdi = langs.quantile(QUANT, dim="sample")
     n_obs = data.group_by("iso639p3code").len()
-
     fig, ax = plt.subplots(1, 1, figsize=(8, 9))
 
     ax.axvspan(
         alpha.sel(quantile=QUANT[0]),
         alpha.sel(quantile=QUANT[-1]),
-        color="darkslategrey",
-        alpha=0.5,
+        color=COLOR2,
+        alpha=0.4,
         lw=0,
         zorder=-1,
     )
     ax.axvspan(
         alpha.sel(quantile=QUANT[1]),
         alpha.sel(quantile=QUANT[-2]),
-        color="darkslategrey",
-        alpha=0.5,
+        color=COLOR2,
+        alpha=0.85,
         lw=0,
         zorder=-1,
     )
-    ax.axvline(alpha.sel(quantile=0.5), c="darkslategrey", zorder=-1)
-
+    ax.axvline(alpha.sel(quantile=0.5), c="k", zorder=-1)
+    label_counter = []
     for li in (-hdi).argsort().sel(quantile=0.5):
         l = langs.j.values[li]
         h = hdi.sel(j=l)
         n = n_obs.filter(pl.col("iso639p3code") == l).get_column("len")
         d = ssp.filter(pl.col("iso639p3code") == l).get_column("is_ssp")
         lang_label = f"{iso639_p3_to_name(l)} ($n$={n[0]:,})"
-
-        ax.hlines(
-            lang_label,
-            h.sel(quantile=QUANT[0]),
-            h.sel(quantile=QUANT[-1]),
-            colors=["orange"],
-            lw=10,
-            alpha=0.5,
-            zorder=-1,
-        )
         ax.hlines(
             lang_label,
             h.sel(quantile=QUANT[1]),
             h.sel(quantile=QUANT[-2]),
-            colors=["orange"],
-            lw=10,
-            alpha=0.5,
+            colors=["k"],
+            lw=3.5,
             zorder=-1,
         )
-        ax.scatter(h.sel(quantile=0.5), lang_label, c="darkslategrey", s=50, marker="x")
-        ax.scatter(d, lang_label, edgecolor="darkslategrey", s=50, facecolors="none")
+        ax.hlines(
+            lang_label,
+            h.sel(quantile=QUANT[0]),
+            h.sel(quantile=QUANT[-1]),
+            colors=["k"],
+            lw=2,
+            zorder=-1,
+        )
+        if families[l] in label_counter:
+            label = None
+        else:
+            label = families[l]
+            label_counter.append(families[l])
 
-    ax.set_title("Observed (○) and model-predicted (×) SSP-compliance")
-    ax.set_xlabel("Probability of SSP-compliance")
+        ax.scatter(
+            h.sel(quantile=0.5),
+            lang_label,
+            s=80,
+            edgecolor="k",
+            facecolor=CLRS[l],
+            label=label,
+        )
+        ax.scatter(d, lang_label, c="k", s=80, marker="x")
+
+    ax.set_title("Observed (×) and model-predicted (○) SSP-compliance")
+    ax.set_xlabel("Probability of SSP-compliance ($\\theta_{ij}$)")
     ax.grid(which="major", axis="x", linestyle="dotted")
 
+    fig.legend(
+        title="Language macro-family",
+        fancybox=True,
+        loc="lower left",
+        bbox_to_anchor=(0.35, 0.1, 0.0, 0.0),
+    )
     fig.tight_layout()
 
     if path:
@@ -245,7 +268,7 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
         hdi.sel(quantile=QUANT[1]),
         hdi.sel(quantile=QUANT[-2]),
         lw=15,
-        colors=["orange"],
+        colors=[COLOR2],
         alpha=0.5,
         zorder=-1,
     )
@@ -254,13 +277,13 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
         hdi.sel(quantile=QUANT[0]),
         hdi.sel(quantile=QUANT[-1]),
         lw=15,
-        colors=["orange"],
+        colors=[COLOR2],
         alpha=0.5,
         zorder=-1,
     )
-    ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c="darkslategrey", marker="x")
-    ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color="darkslategrey")
-    ax.axvline(0, lw=1, ls="dashed", c="darkslategrey")
+    ax.scatter(hdi.sel(quantile=0.5), y, s=100, zorder=0, c=COLOR, marker="x")
+    ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color=COLOR)
+    ax.axvline(0, lw=1, ls="dashed", c=COLOR)
     ax.set_ylim(0, y + (y * 0.1))
     ax.set_ylabel("Number of posterior draws")
     ax.set_axisbelow(True)
@@ -269,7 +292,13 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
     ax.grid(which="both", axis="x", linestyle="dotted")
 
 
-def plot_model_preds(post: xr.DataArray, data: pl.DataFrame, ax: plt.Axes):
+def plot_model_preds(
+    post: xr.DataArray,
+    data: pl.DataFrame,
+    ax: plt.Axes | None = None,
+    path: Path | None = None,
+):
+
     x_nd = np.linspace(1, 9, 100)
     x_raw = data["freq"].to_numpy()
     x = xr.DataArray((x_nd - x_raw.mean()) / x_raw.std(), dims=["x"])
@@ -279,48 +308,75 @@ def plot_model_preds(post: xr.DataArray, data: pl.DataFrame, ax: plt.Axes):
     y_lang = 1 / (1 + (np.exp(-((post.α + post.u) + (post.β + post.w) * x))))
     hdi_lang = y_lang.quantile(0.5, dim="sample")
 
+    ax_missing = ax is None
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(8, 6.5))
+
     ax.fill_between(
         x,
         hdi.sel(quantile=QUANT[0]),
         hdi.sel(quantile=QUANT[-1]),
-        color="darkslategrey",
+        color="grey",
         lw=0,
-        alpha=0.5,
+        alpha=0.60,
+        zorder=0,
     )
     ax.fill_between(
         x,
         hdi.sel(quantile=QUANT[1]),
         hdi.sel(quantile=QUANT[-2]),
-        color="darkslategrey",
+        color="grey",
         lw=0,
-        alpha=0.5,
+        alpha=0.85,
+        zorder=0,
     )
-    ax.plot(x, hdi.sel(quantile=0.5), c="darkslategrey", lw=2)
+    ax.plot(x, hdi.sel(quantile=0.5), c="k", lw=2, zorder=0)
 
+    label_counter = []
     for l in hdi_lang.j.values:
-        ax.plot(x, hdi_lang.sel(j=l), alpha=1 / 4, color="orange")
+        if families[l] in label_counter:
+            label = None
+        else:
+            label = families[l]
+            label_counter.append(families[l])
+
+        ax.plot(x, hdi_lang.sel(j=l), alpha=0.5, color=CLRS[l], label=label, zorder=-1)
 
     tick_labels = np.arange(1, 9)
     ticks = (tick_labels - x_raw.mean()) / x_raw.std()
-    ax.set_title("B) Model-predicted SSP compliance")
     ax.set_xlabel("Lexical frequency (Zipf score)")
     ax.set_xticks(ticks)
     ax.set_xticklabels(tick_labels)
     ax.set_xlabel("Syllabic frequency (Zipf score)")
-    ax.set_ylabel("Probability of SSP-compliance")
+    ax.set_ylabel("Probability of SSP-compliance ($\\theta_{ij}$)")
     ax.grid(which="major", axis="both", linestyle="dotted")
     ax.set_axisbelow(True)
+
+    fig.set_size_inches(8, 6.5)
+    legend = fig.legend(
+        title="Language macro-family",
+        fancybox=True,
+        loc="lower left",
+        bbox_to_anchor=(0.65, 0.12, 0.0, 0.0),
+    )
+    for handle in legend.legend_handles:
+        if handle:
+            handle.set_alpha(1.0)  # Set to 1.0 for fully opaque markers in the
+
+    if ax_missing and path is not None:
+        fig.savefig(path, dpi=DPI)
 
 
 def plot_model_random(post: xr.DataArray, ax: plt.Axes):
     u = 1 / (1 + (np.exp(-(post.α + post.u).mean("sample"))))
     w = (post.β + post.w).mean("sample") / 4
 
-    ax.axhline(1 / (1 + (np.exp(-(post.α.mean("sample"))))), lw=2, c="orange")
-    ax.axvline(post.β.mean("sample") / 4, lw=2, c="orange")
-    ax.axvline(0, ls="dotted", c="darkslategrey")
+    ax.axhline(1 / (1 + (np.exp(-(post.α.mean("sample"))))), lw=2, c=COLOR2)
+    ax.axvline(post.β.mean("sample") / 4, lw=2, c=COLOR2)
+    ax.axvline(0, ls="dotted", c=COLOR)
 
-    ax.scatter(x=w, y=u, color="darkslategrey", marker="x")
+    ax.scatter(x=w, y=u, color=COLOR, marker="x")
 
     for j in post.j.values:
         x, y = u.sel(j=j), w.sel(j=j)
@@ -341,14 +397,14 @@ def plot_model_random(post: xr.DataArray, ax: plt.Axes):
 
 def plot_model(data: pl.DataFrame, post: xr.DataArray, path: Path | None = None):
 
-    fig, axes = plt.subplots(1, 3, figsize=(10, 4))
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 
-    plot_model_params(post, axes[0])  # plot β posterior distribution
-    plot_model_preds(post, data, axes[1])  # plot predictions
-    plot_model_random(post, axes[2])
+    # plot_model_params(post, axes[0])  # plot β posterior distribution
+    plot_model_preds(post, data, ax)  # plot predictions
+    # plot_model_random(post, axes[2])
 
     fig.tight_layout()
-    fig.set_size_inches(9, 3)
+    fig.set_size_inches(6, 6)
     if path:
         fig.savefig(path, dpi=DPI)
 
@@ -365,7 +421,7 @@ def main(
     # table_examples()
     # plot_ssp_examples()
     plot_model_langs(data, post, path=img_path / "model-langs.png")
-    plot_model(data, post, path=img_path / "model-posterior.png")
+    plot_model_preds(post, data, path=img_path / "model-posterior.png")
     # plot_model(
     #     file=utils.RESULTS_PATH / "no-flat" / "post-freq.nc",
     #     path=utils.IMG_PATH / "model-posterior-noflat.png",

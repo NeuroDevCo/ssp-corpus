@@ -11,7 +11,7 @@ format:
     floatsintext: true
     numbered-lines: true
 
-title: Syllabic frequencies reveal a strong cross-lingusitic prevalence of the Sonority Sequencing Principle
+title: Syllabic frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
 keywords: [sonority, syllable, language acquisition, phonology, bayesian]
 author-note:
@@ -39,11 +39,12 @@ authors:
       - ref: sjd
     orcid: 0000-0002-8361-5574
     email: chiara.santolin@sjd.es
+    corresponding: true
 
 affiliations:
   - id: sjd
-    name: Institut de Recerca Sant Joan de Déu
-    address: Neurodevelopment and Comparative Cognition, Àrea de Neonatologia, Hospital Sant Joan de Déu, Santa Rosa, 39-57
+    name: Institut de Recerca Sant Joan de Déu, Barcelona, Spain
+    address: Carrer de Santa Rosa, 39-57
     postal-code: 08950
     region: Barcelona (Spain) 
     city: Esplugues del Llobregat

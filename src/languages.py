@@ -1,5 +1,6 @@
 """Get pronunciations from Wiktionary."""
 
+from functools import cache
 from pathlib import Path
 
 import polars as pl
@@ -53,6 +54,7 @@ def get_glottolog() -> pl.DataFrame:
     return pl.DataFrame(df)
 
 
+@cache
 def get_languages(
     file: Path | str = utils.RESULTS_PATH / "languages.parquet",
 ) -> pl.DataFrame:
