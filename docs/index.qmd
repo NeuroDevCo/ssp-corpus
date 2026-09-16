@@ -28,11 +28,11 @@ s = (
 )
 
 n_langs = s.get_column("iso639p3code").n_unique()
-n_syll = s.get_column("syll").n_unique()
+n_syll = len(s.filter(pl.col("freq").is_not_null()))
 n_fam = s.get_column("family_id").n_unique()
 ```
 
-Sonority is a phonological feature that describes the perceptual salience of a given phoneme relative to neighbouring ones [@blevins1995syllable; @parker2008sound; @parker2002quantifying; @selkirk1984major]. While the acoustic correlates of sonority are still under debate, some physical features like intensity (dB) have been shown to strongly correlate with sonority indexes across spoken languages [@parker2002quantifying; @jany2007how; @fant2000acoustic; @parker2017sounding; but see @albert2022modeling for a different perspective]. Phonemes can be hierarchically organised according to their sonority, with those at the lower end having lower sonority and those at the higher end having higher sonority [e.g., Obstruents < Nasals < Liquids < Glides < Vowels; @clements1990role].  This hierarchy is often represented as a numerical scale [e.g., 1 for lowest sonority, 9 for highest sonority; @parker2008sound]. According to this hierarchy, some syllables are considered well-formed across languages, whereas others are marked as ill-formed. The Sonority Sequencing Principle (SSP) is a phonotactic rule that captures how sonority constrains the ordering of phonemes within a syllable. The SSP states that each syllable should display a unique peak of sonority at the nucleus, and that sonority should rise toward the nucleus and fall away from it [@parker2002quantifying; @selkirk1984major]. Syllables are classified as following or violating the SSP by examining the sequence of sonority values assigned to each of its phonemes. For instance, /blif/ has a sonority contour of `2-6-**8**-3` (`8` being the vowel /i/, nucelus of the syllable) and is therefore considered well-formed. On the other hand, /lbif/ (`6-2-**8**-3`) is considered ill-formed because the onset displays a sonority dip from the first to the second phoneme, violating the progressive increase in sonority that characterizes well-formed syllables (see @tbl-examples for more examples).
+Sonority is a phonological feature that describes the perceptual salience of a given phoneme relative to neighbouring ones [@blevins1995syllable; @parker2008sound; @parker2002quantifying; @selkirk1984major]. While the acoustic correlates of sonority are still under debate, some physical features like intensity (dB) have been shown to strongly correlate with sonority indexes across spoken languages [@parker2002quantifying; @jany2007how; @fant2000acoustic; @parker2017sounding; but see @albert2022modeling for a different perspective]. Phonemes can be hierarchically organised according to their sonority, with those at the lower end having lower sonority and those at the higher end having higher sonority [e.g., Obstruents < Nasals < Liquids < Glides < Vowels, @clements1990role]. This hierarchy is often represented as a numerical scale [e.g., `1` for lowest sonority, `9` for highest sonority, @parker2008sound]. According to this hierarchy, some syllables are considered well-formed across languages, whereas others are marked as ill-formed. The Sonority Sequencing Principle (SSP) is a phonotactic rule that captures how sonority constrains the ordering of phonemes within a syllable. The SSP states that each syllable should display a unique peak of sonority at the nucleus, and that sonority should rise toward the nucleus and fall away from it [@parker2002quantifying; @selkirk1984major]. Syllables are classified as following or violating the SSP by examining the sequence of sonority values assigned to each of its phonemes. For instance, /blif/ has a sonority contour of `2-6-8-3` (`8` being the vowel /i/, nucelus of the syllable) and is therefore considered well-formed. On the other hand, /lbif/ (`6-2-8-3`) is considered ill-formed because the onset displays a sonority dip from the first to the second phoneme, violating the progressive increase in sonority that characterizes well-formed syllables (see @tbl-examples for more examples).
 
 ![Examples of SSP-following and SSP-violating syllables in the dataset. Sonority index contours are shown for each syllable numerically and graphically. For example, the syllable /ˈskul/ in Assamese shows a violation at onset, as sonority drops from /s/ (sonority index `3`) to /k/ (sonority index `1`) before rising again at nucleus /u/ (sonority index `8`).](/img/examples.png){#tbl-examples width="80%" fig-align="center"}
 
@@ -54,11 +54,9 @@ Available lexical frequencies for each word in each language were extracted usin
 
 The phonological transcriptions of words were then segmented into syllable candidates.  When possible, syllable boundary markers were used, either explicit (".") or implicit ("ˈ" for primary stress, "ˌ" for secondary stress). In the absence of syllable markers, the word was assumed to be monosyllabic. Segments of each syllable candidate were then classified as consonants (C), vowels (V), or semi-vowels (v). Individual vowels, consecutive strings of vowels and semi-vowels (e.g., V, VV, Vv, VVv) were classified as vocalic clusters. Syllable candidates with more than one vocalic cluster (e.g., CVvCV, VCV) were flagged as multisyllabic and excluded from the dataset. This methods allowed to extract word-medial syllables when possible. Duplicated syllables within each language were removed (e.g., if the syllable /ka/ appeared in the Spanish words /ˈka.sa/ and /kaˈpo/, it was counted only once in the Spanish dataset). This procedure yielded one syllabic repertoire for each language.
 
-To evaluate whether each extracted syllable followed or violated the SSP, a sonority score was assigned to each phoneme on a scale from `1` to `9`, using the *panphon* Python package [version `{python} importlib.metadata.version("panphon")`, @mortensen2016panphon]. Syllables with more than one peak (i.e., exhibiting a local minimum in the sonority contour) were classified as SSP-violating, and as SSP-following otherwise. Syllables with a flat sonority contour (e.g., English word sphinxs /ˈsfɪŋks/, `3-3-**8**-5-1-3`) were classified as SSP-following. We also run the same analysis after classifying flat sonority contours as SSP violating and found equivalent results (see Supplementary Materials).
+To evaluate whether each extracted syllable followed or violated the SSP, a sonority score was assigned to each phoneme on a scale from `1` to `9`, using the *panphon* Python package [version `{python} importlib.metadata.version("panphon")`, @mortensen2016panphon]. Syllables with more than one peak (i.e., exhibiting a local minimum in the sonority contour) were classified as SSP-violating, and as SSP-following otherwise. Syllables with a flat sonority contour (e.g., English word sphinxs /ˈsfɪŋks/, `3-3-8-5-1-3`) were classified as SSP-following. We also run the same analysis after classifying flat sonority contours as SSP violating and found equivalent results (see @apx-noflat-1).
 
-To calculate the frequency of each syllable, we summed the lexical frequency (counts per million words) of each word the syllable was part of in the dataset [see @duchon2013espal for a similar approach]. The rationale behind this approach is that each time a word is uttered, all of its syllables are uttered as well. Therefore, summing the lexical frequencies of all words containing a given syllable yields an estimate of that syllable’s frequency in natural speech. The final dataset comprised `{python} f"{len(s.filter(pl.col('freq').is_not_null())):,.0f}"` syllables from `{python} f"{len(s.filter(pl.col('freq').is_not_null()).unique('iso639p3code')):,.0f}"` languages from `{python} f"{len(s.filter(pl.col('freq').is_not_null()).unique('family_id')):,.0f}"` distinct language macro-families.
-
-
+To calculate the frequency of each syllable, we summed the lexical frequency (counts per million words) of each word the syllable was part of in the dataset [see @duchon2013espal for a similar approach]. The rationale behind this approach is that each time a word is uttered, all of its syllables are uttered as well. Therefore, summing the lexical frequencies of all words containing a given syllable yields an estimate of that syllable’s frequency in natural speech. The final dataset comprised `{python} f"{n_syll:,.0f}"` syllables from `{python} n_langs` languages from `{python} n_fam` distinct language macro-families.
 
 ## Data analysis
 
@@ -120,42 +118,50 @@ Syllabic frequency showed a positive, non-zero association with the probability 
 
 # Discussion
 
-The present study was aimed at quantifying the cross-linguistic prevalence of the Sonority Sequencing Principle (SSP). We gathered gathered a large number of phonological transcriptions from the Wiktionary database, and derived a syllabic repertoire for each of the `{python} f"{len(s.unique('iso639p3code')):,.0f}"` languages from `{python} f"{len(s.unique('family_id')):,.0f}"` language families. We evlauated the proportion of SSP-following syllables present in each syllabic repertoire, and used Bayesian modelling to estimate the cross-linguistic, and language-specific prevalence of the SSP. We then derived a measure of syllabic frequency for each syllable in the dataset, and compared the relative frequency with which SSP-following and SSP-violating syllables appeared in adult-directed speech (ADS) and child-directerd speech (CDS). Our results show that an overwhelming majority oof the syllables across languages follow the SSP, with very few languages showing less than 90% prevalence of the SSP in their syllabic repertoire. We also found that SSP-following syllables were more frequent than SSP-violating syllables in both ADS and CDS.
+The present study was aimed at quantifying the cross-linguistic prevalence of the Sonority Sequencing Principle (SSP). Previous literature had pointed to the SSP as a possible universal constraint to syllabic structure. This was based on previous experimental research showing that humans of all ages show a preference for SSP-following over SSP-violating structures, even if unattested in their native language [e.g., @berent2010universal; @berent2011phonological], and newborns showing a similar preference in the absence of substantial experience with the phonotactical patters of their native language [@gomez2014language]. Such a preference could be expected to result in a lower markedness for SSP-following syllables across languages, compared to SSP-violating ones, therefore a higher frequency of occurrence for the former in natural speech. This is true to some extent. Qualitative evidence for a role of the SSP in the marking of syllabic structures had been shown in a number of languages, some of them representing edge cases of phonotatics, like Imdlawn Tashlhiyt dialect of Berber, in which syllabic nuclei may involve obstruent (voiceless) consonants [@dell1985syllabic; @prince2004optimality].
 
-Syllables are a privileged linguistic unit in speech processing during the earliest stages of language acquisition [@jusczyk1987representation;  @bertoncini1988investigation; @eimas1999segmental]. For instance, during as early as their first days of life humans are able to discriminate between word-forms based on the number of syllables, instead of relying on the number of phonemes or the duration of the produced utterance [@bijeljac-babic1993how]. Newborns can also track the co-ocurrence of syllable-sized groups of speech sounds to chunk the continuous speech stream into word-like units [@flo2019newborns; @flo2022sleeping], an ability that will later give them access to the precursors of a lexicon [@saffran1996statistical; @saffran2018infant]. Given the relatively limited experience newborns have accumulated with their native language, their ability to identify syllables in speech is remarkable. 
+Violations of the SSP have nonetheless been reported in virtually every language [e.g., @yin2023frequent]. Because of this, the SSP cannot be taken as a hard linguistic universal, but rather as an overall preference toward certain linguistic structures that that virtually all languages display to a varying extent [@prince2004optimality]. Under this account, the posibility of the SSP being universally available as a cue for syllabification at birth becomes a quantitative question: how frequently do syllables abide by the SSP in natural speech? Quantitative estimates of SSP compliance is, to date, sparse.
 
-Previous literature had pointed to the SSP as a possible universal constraint to syllabic structure. This was based on the numerous examples of languages whose syllabic repertoire systematically gravitated toward SSP-following structures. Evidence for a role of the SSP in the marking of syllabic structures has even been shown in Imdlawn Tashlhiyt dialect of Berber, in which syllabic nuclei may involve obstruent (voiceless) consonants [@dell1985syllabic; @prince2004optimality]. Newborns and young infants are sensitive to certain constraints to syllabic structure [e.g. @bertoncini1981syllables; @moon1990syllables; @gomez2014language; @santolin2024abstract]. 
+In the present study, we gathered a large number of syllabified phonological transcriptions from the Wiktionary database, and derived a syllabic repertoire for each of the `{python} n_langs` languages in the dataset. We then evaluated the proportion of SSP-following syllables present in each syllabic repertoire, and used Bayesian modelling to generate an estimation of both cross-linguistic, and language-specific measure of SSP prevalence. Our results suggest an overwhelming presence of SSP-following syllables in natural speech across most languages in the dataset, therefore providing evidence in line with the statistical patterns of natural language reflecting an overall preference for SSP-following syllables. 
 
-the SSP cannot be taken as a hard linguistic universal, but rather as an overall preference toward certain linguistic structures that that virtually all languages display to a varying extent [@prince2004optimality].
+[COMPARE QUANTITATIVE FINDINGS WITH PRIOR RESEARCH]
 
-Under this account, the posibility of the SSP being universally available as a cue for syllabification at birth becomes a quantitative question: how frequently do syllables abide by the SSP in natural speech?
+@frisch2015preliminary
+@yin2023frequent
+@altamimi2013phonotactics
 
-0) Recap of study motivation and aims. Highlight syllabic frequency measure (novely compared to previous literature).
-1) Summary and interpretation of results:
-    1.1) Very high observed prevalence of SSP across languages.
-    1.2) Very few languages show less than 80% of SSP prevalence 
-    1.3) Evidence that SSP-following syllables are slightly more frequent than SSP-violating syllables, both in CDS and ADS.
-2) Comparison with previous estimates of SSP, with especulation about why results may differ:
-    2.1) @yin2023frequent: they show that virtually all languages show violations of the SSP. We provide converging evidence, while emphasizing that, while such violations exist, they may play a marginal role in language acquisition.
-    2.2) Other studies showing lower prevalence of the SSP within or across languages:
-       2.2.1) Different data sources: phonological inventories of attested consonant clusters vs. syllabic repertoires, syllabic frequencies.
-       2.2.2) Possible bias in our dataset: discuss how we accounted for the dataset size bias, and how if differs from previous attempts to correct for it.
-       2.2.3) @altamimi2013phonotactics: standard arabic shows low SSP following in codas.
-3) Implications:
-    2.1) Evidence that the SSP may be available as a cue for syllabification (specially) during language acquisition
-    2.2) The present status does not argue in favour or against the universality status of the SSP, but does point to the SSP as a universally available, functionally relevant phonological feature
-4) Limitations:
-    4.1) No direct evidence of SSP prevalence in the context of language usage (ideally, we would transcribe and syllabify a corpus and simply calculate the proportion of SSP-following syllables). Currently not possible (few datasets are syllabified).
-    4.2) Althoug the present study includes a relatively large sample of languages from different language families, Indoeuropean (mostly Western) languages are overrepresented in the dataset, paralelling the same pattern observed in corpus analysis in Linguistics.
-    4.3) The classification of segments into vowels and consonants ignores that in some languages, certain consonantal phonemes can act like syllabic nuclei. This is the case of post-stress /n/ in the English word "cotton" /kɒt.n̩/. 
-5) Conclusions
+[METHODOLOGICAL PITFALLS WE ADDRESSED]
+
+[SYLLABIC FREQUENCIES]
+
+Positive association with SSP compliance.
+Controls for the problem of selection bias? [@yin2023frequent]
+
+
+Our findings have implications for language acquisition. Syllables are a privileged linguistic unit in speech processing during the earliest stages of language acquisition [@jusczyk1987representation;  @bertoncini1988investigation; @eimas1999segmental]. For instance, during as early as their first days of life humans are able to discriminate between word-forms based on the number of syllables, instead of relying on the number of phonemes or the duration of the produced utterance [@bijeljac-babic1993how]. Newborns can also track the co-ocurrence of syllable-sized groups of speech sounds to chunk the continuous speech stream into word-like units [@flo2019newborns; @flo2022sleeping], an ability that will later give them access to the precursors of a lexicon [@saffran1996statistical; @saffran2018infant]. Given the relatively limited experience newborns have accumulated with their native language, their ability to identify syllables in speech is remarkable. Previous findings suggest that newborns and young infants are sensitive to certain constraints to syllabic structure [e.g. @bertoncini1981syllables; @moon1990syllables; @gomez2014language; @santolin2024abstract]. 
+
+The present status does not argue in favour or against the universality status of the SSP, but does point to the SSP as a universally available, functionally relevant phonological feature
+
+[LIMITATIONS]
+
+* Possible selection bias
+* Representativity
+sonority index, acoustic correlates
+* Level of detail in phonological representations
+* No direct evidence of SSP prevalence in the context of language usage (ideally, we would transcribe and syllabify a corpus and simply calculate the proportion of SSP-following syllables). Currently not possible (few datasets are syllabified).
+* Althoug the present study includes a relatively large sample of languages from different language families, Indoeuropean (mostly Western) languages are overrepresented in the dataset, paralelling the same pattern observed in corpus analysis in Linguistics.
+* The classification of segments into vowels and consonants ignores that in some languages, certain consonantal phonemes can act like syllabic nuclei. This is the case of post-stress /n/ in the English word "cotton" /kɒt.n̩/. 
+
+[NEXT STEPS]
+
+[CONCLUSIONS]
 
 # References
 
 ::: {#refs}
 :::
 
-# Number of SSP-following and SSP-violating syllables per language and language family {#apx-ssp-1}
+# Number of SSP-following and SSP-violating syllables per language {#apx-ssp-1}
 
 ```{=typst}
 #show figure: set block(breakable: true)
@@ -164,22 +170,18 @@ Under this account, the posibility of the SSP being universally available as a c
 ```{python}
 #| label: tbl-ssp-all
 #| tbl-cap: Number of SSP-following and SSP-violating syllables for each language in the dataset.
-
 tbl_data = (
-    s.group_by(["lang"])
+    s.group_by(["iso639p3code"])
     .agg(
         [
             pl.col("n_words").first(),
             pl.count("syll").alias("n"),
             pl.sum("is_ssp").alias("n_following"),
-            (pl.count("syll") - pl.sum("is_ssp")).alias("n_violating"),
         ]
     )
-    .with_columns((pl.col("n_following") / pl.col("n")).alias("prop_following"))
-    .with_columns(
-        quantile=pl.col("prop_following") < pl.col("prop_following").quantile(0.5)
-    )
-    .sort("prop_following", descending=True)
+    .with_columns((pl.col("n_following") / pl.col("n")).alias("prop"))
+    .with_columns(quantile=pl.col("prop") < pl.col("prop").quantile(0.5))
+    .sort("prop", descending=True)
     .with_columns(rank=pl.row_index().over(pl.col("quantile")))
     .pivot(on="quantile", index="rank")
     .select(cs.ends_with("_false"), cs.ends_with("_true"))
@@ -189,25 +191,26 @@ tbl_data = (
     gt.GT(tbl_data, auto_align=True)
     .fmt_integer(cs.numeric())
     .fmt_percent(cs.matches("prop"), decimals=1)
-    .tab_spanner(" ", cs.ends_with("_false"))
-    .tab_spanner("", cs.ends_with("_true"))
     .cols_label(
-        lang_false="Language",
+        iso639p3code_false="ISO-639-3",
         n_false="Syllables",
         n_following_false="SSP+",
-        n_violating_false="SSP-",
-        prop_following_false="%",
+        prop_false="%",
         n_words_false="Words",
-        lang_true="Language",
+        iso639p3code_true="ISO-639-3",
         n_true="Syllables",
         n_following_true="SSP+",
-        n_violating_true="SSP-",
-        prop_following_true="%",
+        prop_true="%",
         n_words_true="Words",
     )
     .sub_missing(cs.all(), "-")
-    .tab_options(table_font_size=12, data_row_padding=0.1)
-    .opt_vertical_padding(scale=0.6)
+    .tab_options(table_font_size=14)
+    .opt_table_font(font=["Times", "Arial"])
 )
 ```
 
+# Results after classifying flat sonority contours as SSP-violating { #apx-noflat-1 }
+
+![Observed (crosses) and model-predicted (circles) estimates of SSP prevalence across languages in the dataset. Intervals indicate the 95% and 79% CrI of the posterior distribution. The number of syllables included in the dataset is indicated next to each language.](/img/no-flat/model-langs.png){ #fig-langs-noflat }
+
+![Mean predictions of SSP compliance as a function of syllabic frequency. Predicted cross-language probability of SSP compliance ($\theta_ij$) is showed as a black line. Thin lines indicate language-specific predictions, color-coded by language macro-family.](/img/no-flat/model-posterior.png){ #fig-model-noflat }

@@ -7,9 +7,11 @@ format:
   apaquarto-typst:  
     floatsintext: true
     numbered-lines: true
-  apaquarto-docx:  
-    floatsintext: true
-    numbered-lines: true
+    crossref-apx-prefix: Supplementary Information
+    mainfont: Arial
+  # apaquarto-docx:  
+  #   floatsintext: true
+  #   numbered-lines: true
 
 title: Syllabic frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
@@ -39,7 +41,6 @@ authors:
       - ref: sjd
     orcid: 0000-0002-8361-5574
     email: chiara.santolin@sjd.es
-    corresponding: true
 
 affiliations:
   - id: sjd
@@ -55,5 +56,6 @@ error: false
 freeze: auto
 code-folded: true
 fig-dpi: 800
+lang: en
 
 
