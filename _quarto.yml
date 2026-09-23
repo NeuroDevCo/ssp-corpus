@@ -9,9 +9,9 @@ format:
     numbered-lines: true
     crossref-apx-prefix: Supplementary Information
     mainfont: Arial
-  # apaquarto-docx:  
-  #   floatsintext: true
-  #   numbered-lines: true
+  apaquarto-docx:  
+    floatsintext: true
+    numbered-lines: true
 
 title: Syllabic frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
