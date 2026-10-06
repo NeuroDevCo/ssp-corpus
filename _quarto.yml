@@ -12,8 +12,9 @@ format:
   apaquarto-docx:  
     floatsintext: true
     numbered-lines: true
+    mainfont: Arial
 
-title: Syllabic frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
+title: Syllable token frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
 keywords: [sonority, syllable, language acquisition, phonology, bayesian]
 author-note:
@@ -44,7 +45,7 @@ authors:
 
 affiliations:
   - id: sjd
-    name: Institut de Recerca Sant Joan de Déu, Barcelona, Spain
+    name: Institut de Recerca Sant Joan de Déu (IRSJD), Barcelona, Spain
     address: Carrer de Santa Rosa, 39-57
     postal-code: 08950
     region: Barcelona (Spain) 
