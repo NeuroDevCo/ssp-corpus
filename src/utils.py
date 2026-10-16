@@ -4,6 +4,7 @@ from pathlib import Path
 from time import time
 
 import polars as pl
+from iso639 import Language
 
 IN_PATH = Path("data/raw")
 RESULTS_PATH = Path("results")
@@ -77,6 +78,22 @@ def cast_to_str(x: pl.DataFrame, sep: str = "_") -> pl.DataFrame:
         .cast(pl.List(pl.String))
         .list.join(sep)
     )
+
+
+def iso639_p3_to_p1(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.part1)
+    except (LookupError, ValueError, AttributeError):
+        return
+
+
+def iso639_p3_to_name(p3: str):
+    try:
+        lang = Language.from_part3(p3)
+        return str(lang.name)
+    except (LookupError, ValueError, AttributeError):
+        return
 
 
 def add_lang_col(x: pl.DataFrame, col: str) -> pl.DataFrame:

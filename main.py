@@ -6,11 +6,12 @@ from pathlib import Path
 import quarto
 from rich.console import Console
 
-from src import languages, model, syllables, utils, viz, words
+from src import languages, model, scraping, syllables, utils, viz, words
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="ssp-corpus")
 
+    parser.add_argument("-p", "--pronunciations", action="store_true")
     parser.add_argument("-l", "--langs", action="store_true")
     parser.add_argument("-w", "--words", action="store_true")
     parser.add_argument("-s", "--syllables", action="store_true")
@@ -21,6 +22,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     con = Console()
+
+    if args.pronunciations:
+        con.rule("Preparing Glottolog language dataset")
+        langs = scraping.main()
 
     if args.langs:
         con.rule("Preparing Glottolog language dataset")

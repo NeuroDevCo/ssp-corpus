@@ -9,14 +9,6 @@ from wordfreq import zipf_frequency
 from src import languages, utils
 
 
-def iso639_p3_to_p1(p3: str):
-    try:
-        lang = Language.from_part3(p3)
-        return str(lang.part1)
-    except (LookupError, ValueError, AttributeError):
-        return
-
-
 @utils.benchmark
 def get_frequencies(
     x: pl.DataFrame, file: Path = utils.RESULTS_PATH / "frequencies.parquet"
