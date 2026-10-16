@@ -128,13 +128,12 @@ def scrape_language(
         for idx, mode in enumerate(["narrow", "broad"]):
             c.narrow = mode == "narrow"
             p.mode_index = idx
-
+            p.mode = mode
             try:
                 with fn.open("a", encoding="utf-8", newline="") as f:
                     f.write("phon\tword\n")
 
                     for word, pron in wikipron.scrape(c):
-                        # print(f"{word}\t{pron}")
                         f.write(f"{word}\t{pron}\n")
                         i += 1
                         p.i = i
