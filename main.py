@@ -38,19 +38,19 @@ if __name__ == "__main__":
         con.rule("Fitting Bayesian models")
         model.main(
             utils.RESULTS_PATH,
-            target_accept=0.99,
-            draws=2000,
-            tune=2000,
-            chains=8,
-            cores=8,
+            target_accept=0.95,
+            draws=1000,
+            tune=1000,
+            chains=4,
+            cores=4,
         )
         model.main(
             utils.RESULTS_PATH / "no-flat",
-            target_accept=0.99,
-            draws=2000,
-            tune=2000,
-            chains=8,
-            cores=8,
+            target_accept=0.95,
+            draws=1000,
+            tune=1000,
+            chains=4,
+            cores=4,
         )
 
     if args.viz:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         p = utils.RESULTS_PATH / "no-flat"
         viz.main(
             data_path=p / "syllables.parquet",
-            post_path=p / "post-freq.nc",
+            post_path=p / "post.nc",
             img_path=utils.IMG_PATH / "no-flat",
         )
 

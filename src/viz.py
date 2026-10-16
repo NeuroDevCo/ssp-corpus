@@ -43,10 +43,14 @@ def get_color_codes(
 data_path: Path = utils.RESULTS_PATH / "syllables.parquet"
 data = pl.read_parquet(data_path)
 families = languages.get_languages().select(["iso639p3code", "family_id"])
+
 families = {k: v for k, v in families.iter_rows()}
 ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
 
-CLRS = get_color_codes(list({families[l] for l in ssp["iso639p3code"]}), cmap="tab10")
+CLRS = get_color_codes(
+    list({families[l if l != "fas" else "pes"] for l in ssp["iso639p3code"]}),
+    cmap="tab10",
+)
 CLRS = {k: CLRS[v] for k, v in families.items() if k in ssp["iso639p3code"]}
 
 
@@ -91,7 +95,6 @@ def plot_ssp_examples():
 
     fig.tight_layout()
     fig.set_size_inches(8, 3)
-    fig.legend(frameon=False, fontsize=7, loc="upper right")
     fig.savefig(IMG_PATH / "ssp-examples.png", dpi=DPI)
 
 
@@ -198,7 +201,6 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
         zorder=-1,
     )
     ax.axvline(alpha.sel(quantile=0.5), c="k", zorder=-1)
-    label_counter = []
     for li in (-hdi).argsort().sel(quantile=0.5):
         l = langs.j.values[li]
         h = hdi.sel(j=l)
@@ -221,20 +223,8 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
             lw=2,
             zorder=-1,
         )
-        if families[l] in label_counter:
-            label = None
-        else:
-            label = families[l]
-            label_counter.append(families[l])
 
-        ax.scatter(
-            h.sel(quantile=0.5),
-            lang_label,
-            s=50,
-            ec="k",
-            fc="w",
-            label=label,
-        )
+        ax.scatter(h.sel(quantile=0.5), lang_label, s=50, ec="k", fc="w")
         ax.scatter(d, lang_label, c="k", s=100, marker="x")
 
     ax.set_xlabel("Probability of SSP-compliance ($\\theta_{ij}$)")
@@ -304,15 +294,8 @@ def plot_model_preds(
 
     ax.plot(x, hdi.sel(quantile=0.5), c="k", lw=2, zorder=0)
 
-    label_counter = []
     for l in hdi_lang.j.values:
-        if families[l] in label_counter:
-            label = None
-        else:
-            label = families[l]
-            label_counter.append(families[l])
-
-        ax.plot(x, hdi_lang.sel(j=l), alpha=0.5, color=COLOR2, label=label, zorder=-1)
+        ax.plot(x, hdi_lang.sel(j=l), alpha=0.5, color=COLOR2, zorder=-1)
 
     tick_labels = np.arange(1, 9)
     ticks = (tick_labels - x_raw.mean()) / x_raw.std()
@@ -373,7 +356,7 @@ def plot_model(data: pl.DataFrame, post: xr.DataArray, path: Path | None = None)
 
 def main(
     data_path: Path = utils.RESULTS_PATH / "syllables.parquet",
-    post_path: Path = utils.RESULTS_PATH / "post-freq.nc",
+    post_path: Path = utils.RESULTS_PATH / "post.nc",
     img_path: Path = utils.IMG_PATH,
 ):
     data = pl.read_parquet(data_path)
@@ -382,7 +365,7 @@ def main(
 
     # table_examples()
     plot_ssp_examples()
-    # plot_model_langs(data, post, path=img_path / "model-langs.png")
+    plot_model_langs(data, post, path=img_path / "model-langs.png")
     plot_model_preds(post, data, path=img_path / "model-preds.png")
     # plot_model(
     #     file=utils.RESULTS_PATH / "no-flat" / "post-freq.nc",

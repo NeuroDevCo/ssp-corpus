@@ -114,10 +114,11 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
         langs = languages.get_languages()
 
     words = []
-
-    n_lang = len(langs)
+    files = [p.with_suffix("").name for p in Path("data/raw").glob("*.csv")]
+    n_lang = len(files)
     msg = f"WORDS: {n_lang:,} languages"
-    for lang in track(langs["iso639p3code"].to_list(), msg, n_lang):
+
+    for lang in track(files, msg, n_lang):
         try:
             df = utils.add_lang_col(get_lang_words(utils.IN_PATH / f"{lang}.csv"), lang)
             df = df.unique(["word", "phon", "iso639p3code"])
@@ -151,4 +152,7 @@ def main():
 
 
 if __name__ == "__main__":
+    w = main()
+
+    f = get_frequencies(w, Path("results/frequencies.parquet"))
     w = main()

@@ -76,9 +76,7 @@ def fit_model(x: pl.DataFrame, **kwargs):
 def main(path: Path, **kwargs):
     """Run models."""
     data = pl.read_parquet(path / "syllables.parquet")
-
     _, idata = fit_model(data, **kwargs)
-
     idata.to_netcdf(path / "post.nc")
 
     return idata
@@ -86,4 +84,4 @@ def main(path: Path, **kwargs):
 
 if __name__ == "__main__":
     for path in [utils.RESULTS_PATH, utils.RESULTS_PATH / "no-flat"]:
-        main(path=path, target_accept=0.99, draws=2000, tune=2000, chains=8, cores=8)
+        main(path=path, target_accept=0.95, draws=1000, tune=1000, chains=4, cores=4)

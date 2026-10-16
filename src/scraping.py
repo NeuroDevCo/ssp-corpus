@@ -7,15 +7,11 @@ from pathlib import Path
 from rich.console import Console
 from wikipron import Config, scrape
 
-from src import languages
+from src import languages, utils
 
 logger = logging.getLogger("pyppeteer")
 
 CON: Console = Console()
-
-
-class EmptyLanguage(Exception):
-    "Language has no available pronunciations."
 
 
 def scrape_language(
@@ -34,7 +30,7 @@ def scrape_language(
     """
     time_fmt = "%Y-%m-%d %H:%M:%S"
     time = datetime.datetime.strftime(datetime.datetime.now(datetime.UTC), time_fmt)
-    lang_label = f"{lang} ({languages.iso639_p3_to_name(lang)})"
+    lang_label = f"{lang} ({utils.iso639_p3_to_name(lang)})"
     CON.print(f"{lang_label} | [blue]Started[/blue] | {time}")
 
     kw = {"key": lang, "syllable_boundaries": True, "stress": True}
