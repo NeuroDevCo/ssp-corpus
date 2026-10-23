@@ -58,6 +58,14 @@ def get_glottolog() -> pl.DataFrame:
 def get_languages(
     file: Path | str = utils.RESULTS_PATH / "languages.parquet",
 ) -> pl.DataFrame:
+    """Get languages dataset from Glottolog.
+
+    Args:
+        file (Path | str, optional): Path to the generated file. Defaults to `utils.RESULTS_PATH/ "languages.parquet"`.
+
+    Returns:
+        pl.DataFrame: Languages dataset.
+    """
     glottolog = get_glottolog()
 
     cols_select = [
@@ -76,6 +84,7 @@ def get_languages(
 
 
 def main():
+    """Main script."""
     return get_languages()
 
 

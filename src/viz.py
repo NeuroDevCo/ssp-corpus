@@ -7,7 +7,6 @@ import numpy as np
 import polars as pl
 import xarray as xr
 from great_tables import GT, nanoplot_options
-from matplotlib import colors
 from matplotlib import pyplot as plt
 
 from src import utils
@@ -19,27 +18,9 @@ DPI = 1200
 QUANT = [0.025, 0.5, 0.975]
 
 
-def get_color_codes(
-    x: list[str], cmap: str = "rainbow", alpha: float = 1.0
-) -> dict[str, str]:
-    """Assign color to each language family.
-
-    Args:
-        x (list[str]): Language families.
-        cmap (str, optional): Color map to use. Defaults to "rainbow".
-        alpha (float, optional): Opacity of the colors. Defaults to 1.0 (full opacity).
-
-    Returns:
-        dict: Language family and hex color pairs.
-    """
-
-    cm = plt.get_cmap(cmap)
-    vals = cm(np.linspace(0, 1, len(x)), alpha=alpha)
-
-    return {k: colors.rgb2hex(v, keep_alpha=True) for k, v in zip(x, vals)}
-
-
 def plot_ssp_examples():
+    """Plot BLIF and LBIF as examples for manuscript."""
+
     word_ex = {"/blif/": [2, 6, 8, 3], "/lbif/": [6, 2, 8, 3]}
     title = ["/blif/ (SSP-following)", "/lbif/ (SSP-violating)"]
     fig, axes = plt.subplots(1, 2, figsize=(8, 3))
@@ -76,6 +57,7 @@ def plot_ssp_examples():
 
 
 def table_examples():
+    """Table of SSP examples for manuscript."""
     langs = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
     s = pl.read_parquet(utils.RESULTS_PATH / "syllables.parquet")
     w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
@@ -159,6 +141,7 @@ def table_examples():
 
 
 def plot_model_langs(data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: Path):
+    """Main figure of the manuscript with model predictions."""
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
 
     langs = 1 / (1 + (np.exp(-(post.α + post.u))))
@@ -247,7 +230,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: 
 
 
 def plot_model_params(post: xr.DataArray | xr.Dataset, ax: plt.Axes):
-
+    """Plot model parameters."""
     post_delta = post.β
     y = 900
     hdi = post_delta.quantile(QUANT, dim="sample")
@@ -283,6 +266,7 @@ def plot_model_preds(
     ax: plt.Axes | None = None,
     path: Path | None = None,
 ):
+    """Plot model predictions."""
 
     x_nd = np.linspace(1, 7, 100)
     x_raw = data["freq"].to_numpy()
@@ -328,6 +312,7 @@ def plot_model_preds(
 
 
 def plot_model_random(post: xr.DataArray, ax: plt.Axes):
+    """Plot model random effects."""
     u = 1 / (1 + (np.exp(-(post.α + post.u).mean("sample"))))
     w = (post.β + post.w).mean("sample") / 4
 
@@ -359,6 +344,7 @@ def main(
     post_path: Path = utils.RESULTS_PATH / "posterior.nc",
     img_path: Path = utils.IMG_PATH,
 ):
+    """Main script."""
     data = pl.read_parquet(data_path)
     idata = az.from_netcdf(post_path, engine="netcdf4")
     post = az.convert_to_dataset(idata.posterior).stack(sample=("chain", "draw"))

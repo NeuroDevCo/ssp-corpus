@@ -19,12 +19,22 @@ logger = logging.getLogger(__name__)
 
 
 def remove_tones(
-    ipa_str,
+    x: str,
     tone_chars: str = "˩˨˧˦˥",
     tone_diacritics: str = "\u0301\u0300\u0302\u030c",
-):
+) -> str:
+    """Remove tone annotations from phonological transcription.
+
+    Args:
+        x (str): Phonological transcription.
+        tone_chars (str, optional): Characters with tone annotations to remove. Defaults to "˩˨˧˦˥".
+        tone_diacritics (str, optional): Characters with tone diacritic annotations to remove. Defaults to "\u0301\u0300\u0302\u030c".
+
+    Returns:
+        str: Phonological transcription with remove tone annotations.
+    """
     for char in tone_chars + tone_diacritics:
-        ipa_str = ipa_str.replace(char, "")
+        ipa_str = x.replace(char, "")
 
     return ipa_str
 
@@ -32,7 +42,17 @@ def remove_tones(
 @utils.benchmark
 @utils.log_shape
 def get_frequencies(x: pl.DataFrame) -> pl.DataFrame:
+    """Get word frequencies for a dataset using wordfreq.
 
+    Args:
+        x (pl.DataFrame): Dataset with language and words to retrieve.
+
+    Raises:
+        ValueError: If more than one language is detected in "iso639p3code" column in `x`.
+
+    Returns:
+        pl.DataFrame: Dataset of frequencies for available words in wordfreq.
+    """
     if len(x) == 0:
         return pl.DataFrame(FREQ_SCHEMA)
 
@@ -112,7 +132,16 @@ def get_lang_words(
 
 
 @utils.log_shape
-def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
+def get_words(langs: pl.DataFrame | None = None, min_words: int = 100) -> pl.DataFrame:
+    """Get words dataset from Wiktionary output files.
+
+    Args:
+        langs (pl.DataFrame | None, optional): Dataset of languages to get words for. Defaults to None.
+        min_words (int, optional): Minimum available words for a language to be included. Defaults to 100.
+
+    Returns:
+        pl.DataFrame: Words dataset.
+    """
     if langs is None:
         langs = languages.get_languages()
 
@@ -167,6 +196,7 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100):
 
 
 def main():
+    """Main script."""
     l = pl.read_parquet(utils.RESULTS_PATH / "languages.parquet")
 
     return get_words(l)
