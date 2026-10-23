@@ -125,7 +125,7 @@ def table_examples():
         .with_columns(
             pl.col("sonority_2").list.join(" "),
             pl.col("sonority").list.join("-"),
-            phon=pl.col("word") + pl.lit("| /") + pl.col("phon") + pl.lit("/"),
+            phon=pl.col("word") + pl.lit(" | /") + pl.col("phon") + pl.lit("/"),
             syll=pl.lit(" /") + pl.col("syll") + pl.lit("/"),
         )
         .sort("is_ssp")
@@ -158,7 +158,7 @@ def table_examples():
     return tbl
 
 
-def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
+def plot_model_langs(data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: Path):
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
 
     langs = 1 / (1 + (np.exp(-(post.α + post.u))))
@@ -181,7 +181,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
     ax.text(
         alpha.sel(quantile=QUANT[0]) - 0.03,
         -2,
-        s=f"Global median ($n$ = {len(data):,})",
+        s=f"Global median ({alpha.sel(quantile=QUANT[0]):.2%}, $n$ = {len(data):,})",
         ha="right",
         va="center",
         fontsize=7,
@@ -191,7 +191,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
         alpha.sel(quantile=QUANT[0]),
         alpha.sel(quantile=QUANT[-1]),
         colors=["k"],
-        lw=2,
+        lw=1.5,
         zorder=-1,
     )
     ax.scatter(alpha.sel(quantile=QUANT[1]), -2, s=50, marker="d", c="k")
@@ -246,7 +246,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray, path: Path):
         fig.savefig(path, dpi=DPI)
 
 
-def plot_model_params(post: xr.DataArray, ax: plt.Axes):
+def plot_model_params(post: xr.DataArray | xr.Dataset, ax: plt.Axes):
 
     post_delta = post.β
     y = 900
@@ -278,7 +278,7 @@ def plot_model_params(post: xr.DataArray, ax: plt.Axes):
 
 
 def plot_model_preds(
-    post: xr.DataArray,
+    post: xr.DataArray | xr.Dataset,
     data: pl.DataFrame,
     ax: plt.Axes | None = None,
     path: Path | None = None,

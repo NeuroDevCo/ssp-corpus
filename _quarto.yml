@@ -19,6 +19,8 @@ title: Syllable token frequencies reveal a high cross-linguistic prevalence of t
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
 keywords: [sonority, syllable, language acquisition, phonology, bayesian]
 
+abstract: The Sonority Sequencing Principle (SSP) is a phonotactical rule that constrains the order of the phonemes inside a syllable based on their perceptual salience. Experimental evidence suggests that the SSP modulates speech processing from the earliest stages of language acquisition, when SSP-following syllables are preferred. Whether such a preference is reflected in a higher prevalence of SSP-following structures in natural speech across languages is relatively unknown. To address this issue, we gathered a large dataset of 43,229 syllables from 67 languages (13 macro-families), and used multilevel Bayesian modelling to yield an estimate of SSP compliance across languages. To better reflect the rate of occurrence of SSP-following and SSP-violating syllables in natural speech, we adjusted the model estimates using a measure of syllabic frequency, predicting a positive correlation between the frequency of syllables and their compliance with the SSP. We found an overall estimate of SSP compliance of 98.7%, with all languages showing at least a 69% compliance. SSP-following syllables were, on average, more frequent than SSP-violating syllables. Our results suggest that the SSP is readily available as a cue to judge the well-formedness of syllables in most languages, reflecting speakers' preferences for such structures.
+
 author-note:
   correspondence-note: "Correspondence concerning this article may be addressed to Gonzalo García-Castro or Chiara Santolin: Institut de Recerca Sant Joan de Déu (IRSJD), Barcelona, Spain, Carrer de Santa Rosa, 39-57, Esplugues del Llobregat, Barcelona (Spain) 08950. Email: [gonzalo.garcia@sjd](mailto:gonzalo.garcia@sjd.es), [chiara.santolin@sjd.es](mailto:chiara.santolin@sjd.es)."
   disclosures:
@@ -29,7 +31,7 @@ author-note:
     financial-support: |
       This work is supported by the ERC StG 101115991 (GALA) awarded to Chiara Santolin.
     gratitude: |
-      We want to thank members of the Neurodevelopment and Comparative Cognition research group at Institut de Recerca Sant Joan de Déu (IRSJD), Damián Blasi, and Martin Zettersten for their comments and feedback on early versions of this manuscript.
+      We are grateful to Damián Blasi and Martin Zettersten for their helpful feedback on early versions of this manuscript. We want also thank current and former members of the Neurodevelopment and Comparative Cognition research group at Institut de Recerca Sant Joan de Déu (IRSJD), especially to Silvia Valls, for their insights. 
 bibliography: docs/bibliography.bib
 csl: docs/apa.csl
 

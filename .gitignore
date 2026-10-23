@@ -198,3 +198,5 @@ docs/*_files/
 
 /docs/*.pdf
 /docs/*.docx
+logs/
+submissions/

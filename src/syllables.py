@@ -197,7 +197,7 @@ def get_lang_syllables(
     if freq:
         df = (
             df.group_by(["iso639p3code", "syll", "struct"])
-            .agg(pl.col("freq_pmw").mean())
+            .agg(pl.col("freq_pmw").sum())
             .with_columns(freq=(pl.col("freq_pmw") + 0.01).log10() + 3)
         )
     else:

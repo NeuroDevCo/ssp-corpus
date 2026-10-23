@@ -27,7 +27,7 @@ s = (
 
 n_langs = s.get_column("iso639p3code").n_unique()
 n_syll = len(s.filter(pl.col("freq").is_not_null()))
-n_fam = s.get_column("family_id").n_unique()
+n_fams = s.get_column("family_id").n_unique()
 ```
 
 Sonority is a phonological feature that describes the perceptual salience of a given phoneme relative to neighbouring ones [@blevins1995syllable; @parker2008sound; @parker2002quantifying; @selkirk1984major]. While the acoustic correlates of sonority are debated, some physical features such as intensity have been shown to correlate strongly with sonority indices in spoken languages [@parker2002quantifying; @jany2007how; @fant2000acoustic; @parker2017sounding; but see @albert2022modeling for a different perspective]. Phonemes can be hierarchically organised according to their sonority, with those at the lower end having lower sonority and those at the higher end having higher sonority [e.g., Obstruents < Nasals < Liquids < Glides < Vowels, @clements1990role]. This hierarchy is often represented as a numerical scale [e.g., 1 for lowest sonority, 9 for highest sonority, @parker2008sound]. Based on this sonority hierarchy, some syllables are considered well-formed across languages while others are marked as ill-formed.
@@ -62,7 +62,7 @@ To evaluate whether each extracted syllable followed or violated the SSP, a sono
 
 ![Examples of SSP-following and SSP-violating syllables in the dataset. Sonority index contours are shown for each syllable numerically and graphically. For example, the syllable /ˈskul/ in Assamese shows a violation at onset, as sonority drops from /s/ (sonority index `3`) to /k/ (sonority index `1`) before rising again at nucleus /u/ (sonority index `8`).](/img/examples.png){#tbl-examples width="80%" fig-align="center"}
 
-To calculate the frequency of each syllable, we summed the lexical frequency (counts per million words) of all words in the dataset which contained that syllable [see @duchon2013espal for a similar approach]. The rationale behind this approach is that, whenever a word is uttered, all of its syllables are necessarily uttered as well. Therefore, summing the lexical frequencies of all words containing a given syllable yields an estimate of that syllable’s frequency in natural speech.  The final dataset comprised `{python} f"{n_syll:,.0f}"` syllables from `{python} n_langs` languages from `{python} f"{n_syll:,.0f}"` distinct language macro-families.
+To calculate the frequency of each syllable, we summed the lexical frequency (counts per million words) of all words in the dataset which contained that syllable [see @duchon2013espal for a similar approach]. The rationale behind this approach is that, whenever a word is uttered, all of its syllables are necessarily uttered as well. Therefore, summing the lexical frequencies of all words containing a given syllable yields an estimate of that syllable’s frequency in natural speech.  The final dataset comprised `{python} f"{n_syll:,.0f}"` syllables from `{python} n_langs` languages from `{python} f"{n_fams:,.0f}"` distinct language macro-families.
 
 ## Data analysis
 

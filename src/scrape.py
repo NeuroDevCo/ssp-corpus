@@ -41,7 +41,7 @@ class Config(wikipron.Config):
     def __post_init__(self):
         self.language = self._get_language(self.language)
         self.casefold: Callable[[str], str] = self._get_casefold(self.casefold)
-        self.cut_off_date: str = self._get_cut_off_date(self.cut_off_date)
+        self.cut_off_date: str | Callable = self._get_cut_off_date(self.cut_off_date)
         self.extract_word_pron = self._get_extract_word_pron(self.language)
         self.pron_xpath_selector: str = self._get_pron_xpath_selector(
             self.language, self.dialect
