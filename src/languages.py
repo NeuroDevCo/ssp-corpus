@@ -80,4 +80,4 @@ def main():
 
 
 if __name__ == "__main__":
-    langs = main()
+    l = main()

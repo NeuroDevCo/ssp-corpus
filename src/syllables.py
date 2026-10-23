@@ -56,7 +56,7 @@ def classify_segments(x: str, on_missing: str = "warning") -> str | None:
         elif features.get("syl") == 1:
             out += "V"  # vowel (syllabic nucleus)
 
-        elif features.get("cons") == 1:
+        elif features.get("cons") == 1 or segment == "ʔ":
             out += "C"  # consonant (onset or coda)
 
         else:
@@ -109,7 +109,7 @@ def extract_sonority(x: str) -> list[int]:
     return [SON[s] for s in FT.ipa_segs(x) if s in SON]
 
 
-def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = True) -> bool:
+def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = False) -> bool:
     """
     Determine whether a sequence contains at most one strict local maximum.
 
@@ -129,7 +129,7 @@ def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = True) -> bool:
         >>> has_one_peak([1, 2, 1, 2, 1])
         False
         >>> has_one_peak([5, 5, 5])
-        True
+        False
         >>> has_one_peak([])
         True
         >>> has_one_peak([42])
@@ -197,7 +197,7 @@ def get_lang_syllables(
     if freq:
         df = (
             df.group_by(["iso639p3code", "syll", "struct"])
-            .agg(pl.col("freq_pmw").sum())
+            .agg(pl.col("freq_pmw").mean())
             .with_columns(freq=(pl.col("freq_pmw") + 0.01).log10() + 3)
         )
     else:
@@ -210,7 +210,8 @@ def get_lang_syllables(
         .list.eval(pl.element().replace(SON)),
     ).with_columns(
         is_ssp=pl.col("sonority").map_elements(
-            lambda x: has_one_peak(x, allow_flat=allow_flat), return_dtype=pl.Boolean
+            lambda x: has_one_peak(x, allow_flat=allow_flat),
+            return_dtype=pl.Boolean,
         ),
     )
 
@@ -233,8 +234,10 @@ def get_syllables(
     for lang_words in track(part_words, msg, len(part_words)):
         try:
             df = get_lang_syllables(lang_words, freq=freq, allow_flat=allow_flat)
+
             if df is None or len(df) < min_syll:
                 continue
+
             syll.append(df)
 
             lang = lang_words.unique("iso639p3code").get_column("iso639p3code")
@@ -261,7 +264,7 @@ def main():
     w = pl.read_parquet(utils.RESULTS_PATH / "words.parquet")
 
     s_file = utils.RESULTS_PATH / "syllables.parquet"
-    s = get_syllables(w, path=s_file)
+    s = get_syllables(w, path=s_file, min_syll=60)
 
     sf_file = utils.RESULTS_PATH / "no-flat" / "syllables.parquet"
     sf = get_syllables(w, allow_flat=False, path=sf_file)
