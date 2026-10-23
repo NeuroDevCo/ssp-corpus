@@ -118,7 +118,7 @@ def has_one_peak(x: list[int] | np.ndarray, allow_flat: bool = False) -> bool:
 
     Args:
         x (list[int] | np.ndarray): Sequence of integers to evaluate.
-        allow_flat (bool, optional): Should consecutive identical elements be considered truthy or falsy? Defaults to True.
+        allow_flat (bool, optional): Should consecutive identical elements be considered truthy or falsy? Defaults to False.
 
     Returns:
         bool: True if the number of maxima is 0 or 1, False when there are two or more.
