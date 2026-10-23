@@ -1,5 +1,9 @@
 """Util functions."""
 
+import functools
+import inspect
+import logging
+from datetime import datetime
 from pathlib import Path
 from time import time
 
@@ -12,23 +16,83 @@ SYLL_PATH = Path("data/processed/syllables")
 WORD_PATH = Path("data/processed/words")
 IMG_PATH = Path("img")
 MODEL_PATH = Path("model")
+LOGS_PATH = Path("logs")
 
+LOGS_PATH.mkdir(parents=True, exist_ok=True)
 SYLL_PATH.mkdir(parents=True, exist_ok=True)
 WORD_PATH.mkdir(parents=True, exist_ok=True)
 
+logger = logging.getLogger("ssp-corpus")
+
+date_str = datetime.strftime(datetime.now(), "%Y-%m-%d_%H%M")
+log_path = LOGS_PATH / f"{date_str}.log"
+
+fmt = logging.Formatter("%(asctime)s | %(name)s | %(levelname)s | %(message)s")
+
+console = logging.StreamHandler()  # stderr by default
+console.setFormatter(fmt)
+logger.addHandler(console)
+
+file_handler = logging.FileHandler(log_path)
+file_handler.setFormatter(fmt)
+logger.addHandler(file_handler)
+
 
 def benchmark(func):
-    """Print the runtime of a decorated function"""
+    """Log the runtime of a decorated function"""
 
     def wrapper_timer(*args, **kwargs):
         start_time = time()
         value = func(*args, **kwargs)
         end_time = time()
         run_time = end_time - start_time
-        print(f"Finished {func.__name__}() in {run_time:.4f} seconds")
+        logger.info(f"Finished {func.__name__}() in {run_time:.4f} seconds")
         return value
 
     return wrapper_timer
+
+
+def log_shape(func):
+    """Log the shape of the Polars DataFrame returned by the decorated function."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        rows, cols = result.shape
+        logger.info("%s Words dataframe: %d rows x %d cols", func.__name__, rows, cols)
+
+        return result
+
+    return wrapper
+
+
+def with_seps(sep: list[str]):
+    """Call the decorated function with sep[0]; on exception, retry with
+    sep[1], etc. Any `sep` argument supplied by the caller is overridden."""
+
+    def decorator(func):
+        sig = inspect.signature(func)
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if not sep:
+                raise ValueError("with_seps: the sep list is empty")
+
+            # Bind caller args once, then drop any `sep` they provided
+            # (positional or keyword) so only our values are used.
+            bound = sig.bind(*args, **kwargs)
+            bound.arguments.pop("sep", None)
+
+            for s in sep:
+                try:
+                    return func(*bound.args, sep=s, **bound.kwargs)
+                except pl.exceptions.ColumnNotFoundError as e:
+                    last_exc = e
+            raise last_exc
+
+        return wrapper
+
+    return decorator
 
 
 def add_missing_headers(path: Path = Path("data", "raw")):
@@ -161,9 +225,3 @@ def find_ssp_examples(
     df = pl.concat(df).unique(["iso639p3code", "syll_sel"])
 
     return df
-
-
-if __name__ == "__main__":
-    w = pl.read_parquet(Path("out/words.parquet"))
-    s = pl.read_parquet(Path("out/syllables.parquet"))
-    e = find_ssp_examples(w, s, iso639p3code=["tha", "fin", "eng"])

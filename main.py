@@ -6,7 +6,7 @@ from pathlib import Path
 import quarto
 from rich.console import Console
 
-from src import languages, model, scraping, syllables, utils, viz, words
+from src import languages, model, scrape, syllables, utils, viz, words
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="ssp-corpus")
@@ -25,7 +25,7 @@ if __name__ == "__main__":
 
     if args.pronunciations:
         con.rule("Preparing Glottolog language dataset")
-        langs = scraping.main()
+        langs = scrape.main()
 
     if args.langs:
         con.rule("Preparing Glottolog language dataset")
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         p = utils.RESULTS_PATH / "no-flat"
         viz.main(
             data_path=p / "syllables.parquet",
-            post_path=p / "post.nc",
+            post_path=p / "posterior.nc",
             img_path=utils.IMG_PATH / "no-flat",
         )
 

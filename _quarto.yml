@@ -13,11 +13,14 @@ format:
     floatsintext: true
     numbered-lines: true
     mainfont: Arial
+    crossref-apx-prefix: Supplementary Information
 
-title: Syllable token frequencies reveal a strong cross-linguistic prevalence of the Sonority Sequencing Principle
+title: Syllable token frequencies reveal a high cross-linguistic prevalence of the Sonority Sequencing Principle
 shorttitle: Syllabic frequency and Sonority Sequencing Principle
 keywords: [sonority, syllable, language acquisition, phonology, bayesian]
+
 author-note:
+  correspondence-note: "Correspondence concerning this article may be addressed to Gonzalo García-Castro or Chiara Santolin: Institut de Recerca Sant Joan de Déu (IRSJD), Barcelona, Spain, Carrer de Santa Rosa, 39-57, Esplugues del Llobregat, Barcelona (Spain) 08950. Email: [gonzalo.garcia@sjd](mailto:gonzalo.garcia@sjd.es), [chiara.santolin@sjd.es](mailto:chiara.santolin@sjd.es)."
   disclosures:
     conflict of interest: |
       The authors has no conflict of interest to declare.
@@ -25,7 +28,8 @@ author-note:
       Raw data, reproducible code, and project documentation are available in the Open Science Framework ([https://osf.io/yeqms]([https://osf.io/yeqms])) and GitHub ([https://github.com/NeuroDevCo/ssp-corpus](https://github.com/NeuroDevCo/ssp-corpus)).
     financial-support: |
       This work is supported by the ERC StG 101115991 (GALA) awarded to Chiara Santolin.
-
+    gratitude: |
+      We want to thank members of the Neurodevelopment and Comparative Cognition research group at Institut de Recerca Sant Joan de Déu (IRSJD), Damián Blasi, and Martin Zettersten for their comments and feedback on early versions of this manuscript.
 bibliography: docs/bibliography.bib
 csl: docs/apa.csl
 
