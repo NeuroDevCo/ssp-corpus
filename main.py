@@ -24,8 +24,8 @@ if __name__ == "__main__":
     con = Console()
 
     if args.pronunciations:
-        con.rule("Preparing Glottolog language dataset")
-        langs = scrape.main()
+        con.rule("Scraping Wikitionary")
+        scrape.main()
 
     if args.langs:
         con.rule("Preparing Glottolog language dataset")
