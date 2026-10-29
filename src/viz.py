@@ -251,8 +251,9 @@ def plot_model_params(post: xr.DataArray | xr.Dataset, ax: plt.Axes):
     ax.hist(post_delta, bins=15, edgecolor="w", linewidth=1, color="lightgrey")
     ax.axvline(0, lw=1, ls="dashed", c=COLOR)
     ax.set_ylim(0, y * 1.1)
-    ax.set_yticks([])
+    # ax.set_yticks([])
     ax.set_axisbelow(True)
+    ax.set_ylabel("Number of posterior draws")
     ax.set_xlabel(
         "Posterior distribution of regression\ncoefficient for syllabic frequency ($\\beta$)"
     )
@@ -352,7 +353,6 @@ def main(
     table_examples()
     plot_ssp_examples()
     plot_model_langs(data, post, path=img_path / "model-langs.png")
-    plot_model_preds(post, data, path=img_path / "model-preds.png")
 
 
 if __name__ == "__main__":
