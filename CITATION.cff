@@ -1,0 +1,12 @@
+cff-version: 0.1.0
+message: "Please cite it as below."
+authors:
+- family-names: García-Castro
+  given-names: Gonzalo
+  orcid: https://orcid.org/0000-0002-8553-4209
+- family-names: Santolin
+  given-names: Chiara
+  orcid: https://orcid.org/0000-0002-8361-5574
+title: "Syllable token frequencies reveal a high cross-linguistic prevalence of the Sonority Sequencing Principle"
+version: v0.1.0
+date-released: 2026-10-30
