@@ -1,6 +1,7 @@
 # ssp-corpus
 
-[![Testing](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml/badge.svg)](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml)
+[![Testing](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml/badge.svg)](https://github.com/NeuroDevCo/ssp-corpus/actions/workflows/lint-test.yml) 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23811920.svg)](https://doi.org/10.5281/zenodo.23811920)
 
 Estimating the prevalence of the Sonority Sequencing Principle (SSP) across languages.
 
@@ -32,7 +33,7 @@ ssp-corpus/
 ## Pre-requisites
 
 * Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
-* Download file `data.zip` from the [OSF repository](https://osf.io/yeqms/files/osfstorage) and unzip into the project folder. Alternatively run the `src/scrap.py` script if you want to scrape Wiktionari anew using wikipron:
+* Download file `data.zip` from the [Zenodo repository](https://zenodo.org/records/23811920?token=eyJhbGciOiJIUzUxMiJ9.eyJpZCI6ImU1ZTc3NTdiLWU0N2QtNDJkMi04ODc2LWRiY2YxNmVlNzAzMCIsImRhdGEiOnt9LCJyYW5kb20iOiIwNTc5MzM3Nzg5N2Q5ZGNmOGYzOTZlNjk5NmQ4YmUwZCJ9.wOnliJKNnckYZjhSklrUY2SflPFR_tv8QkarBWkLt-wCoiStJXW6hA4YeoLY-vTwqY_RT-ekVKv3erLc2On68w) and unzip into the project folder. Alternatively run the `src/scrap.py` script if you want to scrape Wiktionary anew using wikipron:
 
 ```bash
 uv run src/scrape.py # add -l [code] to scrape a particular language
