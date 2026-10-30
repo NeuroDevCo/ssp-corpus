@@ -33,10 +33,11 @@ def remove_tones(
     Returns:
         str: Phonological transcription with remove tone annotations.
     """
+    y = x
     for char in tone_chars + tone_diacritics:
-        ipa_str = x.replace(char, "")
+        y = y.replace(char, "")
 
-    return ipa_str
+    return y
 
 
 @utils.benchmark
@@ -87,7 +88,10 @@ def get_frequencies(x: pl.DataFrame) -> pl.DataFrame:
 
 @utils.with_seps(["\t", ","])
 def get_lang_words(
-    file: Path | str, syll_boundaries: list[str] | None = None, sep=","
+    file: Path | str,
+    syll_boundaries: list[str] | None = None,
+    tone_char: str = "˩˨˧˦˥",
+    sep=",",
 ) -> pl.DataFrame:
     """Preprocess word forms of a language corpus.
 
@@ -104,12 +108,12 @@ def get_lang_words(
         syll_boundaries = [".", "ˈ", "ˌ"]
 
     df = (
-        pl.scan_csv(file, separator=sep, has_header=False, schema=SCHEMA)
+        pl.read_csv(file, separator=sep, has_header=False, schema=SCHEMA)
         .unique("phon")
-        .with_columns(pl.col("phon").map_elements(remove_tones, return_dtype=pl.String))
-        .with_columns(pl.col("phon").str.replace_all(" ", ""))
         .with_columns(
             pl.col("phon")
+            .str.replace_many(list(tone_char), [""] * len(tone_char))
+            .str.replace_all(" ", "")
             .str.replace_many(list(syll_boundaries), ["_"])
             .str.strip_chars("_")
             .alias("phon_tmp")
@@ -125,7 +129,7 @@ def get_lang_words(
             pl.col("syll").list.len().alias("n_syll"),
         )
         .select(["word", "phon", "syll", "n_phon", "n_syll"])
-        .collect()
+        # .collect()
     )
 
     return pl.DataFrame(df)
@@ -151,9 +155,6 @@ def get_words(langs: pl.DataFrame | None = None, min_words: int = 100) -> pl.Dat
     files = csv + tsv
     n_lang = len(langs["iso639p3code"])
     msg = f"WORDS: {n_lang:,} files"
-
-    if langs is None:
-        langs = languages.get_languages()
 
     for lang in track(langs["iso639p3code"], msg, n_lang):
         lang_df = []

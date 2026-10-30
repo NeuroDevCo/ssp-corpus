@@ -38,7 +38,7 @@ def fit_model(data: dict, **kwargs):
         **kwargs: Additional arguments passed to `pm.sample()`.
 
     Returns:
-        tuple[pm.Model, xr.DataTree]: Model and inference data of the model (comparible with Arviz).
+        tuple[pm.Model, xr.DataTree]: Model and inference data of the model (comparable with Arviz).
     """
     coords = {"j": data["j_names"], "i": np.arange(data["N"])}
     x = (data["x"] - data["x"].mean()) / data["x"].std()  # Standardize

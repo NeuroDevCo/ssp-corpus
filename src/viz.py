@@ -140,7 +140,9 @@ def table_examples():
     return tbl
 
 
-def plot_model_langs(data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: Path):
+def plot_model_langs(
+    data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: Path, xlim: float = 0.5
+):
     """Main figure of the manuscript with model predictions."""
     ssp = data.group_by(["iso639p3code"]).agg(pl.col("is_ssp").mean())
 
@@ -208,7 +210,7 @@ def plot_model_langs(data: pl.DataFrame, post: xr.DataArray | xr.Dataset, path: 
         ax.scatter(d, lang_label, c="orange", s=50, marker="x", label=label)
 
     ax.set_yticks([])
-    ax.set_xlim(0.5, 1.0)
+    ax.set_xlim(xlim, 1.0)
     ax.spines[["left", "top", "right"]].set_visible(False)
     ax.grid(True, lw=0.5)
     ax.set_xlabel("Probability of SSP-compliance ($\\theta_{ij}$)")
@@ -344,6 +346,7 @@ def main(
     data_path: Path = utils.RESULTS_PATH / "syllables.parquet",
     post_path: Path = utils.RESULTS_PATH / "posterior.nc",
     img_path: Path = utils.IMG_PATH,
+    **kwargs,
 ):
     """Main script."""
     data = pl.read_parquet(data_path)
@@ -352,7 +355,7 @@ def main(
 
     table_examples()
     plot_ssp_examples()
-    plot_model_langs(data, post, path=img_path / "model-langs.png")
+    plot_model_langs(data, post, path=img_path / "model-langs.png", **kwargs)
 
 
 if __name__ == "__main__":
@@ -363,4 +366,5 @@ if __name__ == "__main__":
         data_path=noflat_path / "syllables.parquet",
         post_path=noflat_path / "posterior.nc",
         img_path=utils.IMG_PATH / "no-flat",
+        xlim=0.3,
     )
