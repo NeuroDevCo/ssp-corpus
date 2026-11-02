@@ -66,9 +66,9 @@ def table_examples():
     syllables = [
         "font",
         "fpɐɫ",
-        "dɑ̝u̯n",
+        "koht",
         "s̠trø̞m",
-        "dˤaːd",
+        "njäːɾ",
         "nisr",
         "st̪ɐ̃n",
         "pʰɛ",
@@ -156,7 +156,7 @@ def plot_model_langs(
     ax.set_title("A", loc="left")
     ax.axvspan(
         alpha.sel(quantile=QUANT[0]),
-        alpha.sel(quantile=QUANT[-1]),
+        alpha.sel(quantile=QUANT[2]),
         color=COLOR2,
         alpha=0.85,
         lw=0,
@@ -166,7 +166,7 @@ def plot_model_langs(
     ax.text(
         alpha.sel(quantile=QUANT[0]) - 0.03,
         -2,
-        s=f"Global median ({alpha.sel(quantile=QUANT[0]):.2%}, $n$ = {len(data):,})",
+        s=f"Global median ({alpha.sel(quantile=QUANT[1]):.2%}, $n$ = {len(data):,})",
         ha="right",
         va="center",
         fontsize=7,

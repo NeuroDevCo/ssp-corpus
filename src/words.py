@@ -108,8 +108,9 @@ def get_lang_words(
         syll_boundaries = [".", "ˈ", "ˌ"]
 
     df = (
-        pl.read_csv(file, separator=sep, has_header=False, schema=SCHEMA)
-        .unique("phon")
+        pl.scan_csv(file, separator=sep, has_header=False, schema=SCHEMA)
+        .unique("word")
+        .with_columns(pl.col("phon").str.replace_all(" ", ""))
         .with_columns(
             pl.col("phon")
             .str.replace_many(list(tone_char), [""] * len(tone_char))
@@ -129,7 +130,7 @@ def get_lang_words(
             pl.col("syll").list.len().alias("n_syll"),
         )
         .select(["word", "phon", "syll", "n_phon", "n_syll"])
-        # .collect()
+        .collect()
     )
 
     return pl.DataFrame(df)
