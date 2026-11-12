@@ -48,7 +48,7 @@ In the present study, we aim to overcome these two pitfalls by providing a quant
 
 # Methods
 
-Raw data, reproducible code, and project documentation are available in the Zenodo ([LINK REDACTED FOR ANONIMITY]) and GitHub ([LINK REDACTED FOR ANONIMITY]).
+Raw data, reproducible code, and project documentation are available in the Zenodo ([LINK REDACTED FOR ANONIMITY]) and GitHub (<https://anonymous.4open.science/r/ssp-corpus/>).
 
 ## Data collection and preprocessing
 

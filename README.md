@@ -33,7 +33,9 @@ ssp-corpus/
 ## Pre-requisites
 
 * Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
-* Download file `data.zip` from the [Zenodo repository](https://zenodo.org/records/23811920?token=eyJhbGciOiJIUzUxMiJ9.eyJpZCI6ImU1ZTc3NTdiLWU0N2QtNDJkMi04ODc2LWRiY2YxNmVlNzAzMCIsImRhdGEiOnt9LCJyYW5kb20iOiIwNTc5MzM3Nzg5N2Q5ZGNmOGYzOTZlNjk5NmQ4YmUwZCJ9.wOnliJKNnckYZjhSklrUY2SflPFR_tv8QkarBWkLt-wCoiStJXW6hA4YeoLY-vTwqY_RT-ekVKv3erLc2On68w) and unzip into the project folder. Alternatively run the `src/scrap.py` script if you want to scrape Wiktionary anew using wikipron:
+* Download file `data.zip` from the [Zenodo repository](https://zenodo.org/records/23811920?token=eyJhbGciOiJIUzUxMiJ9.eyJpZCI6ImU1ZTc3NTdiLWU0N2QtNDJkMi04ODc2LWRiY2YxNmVlNzAzMCIsImRhdGEiOnt9LCJyYW5kb20iOiIwNTc5MzM3Nzg5N2Q5ZGNmOGYzOTZlNjk5NmQ4YmUwZCJ9.wOnliJKNnckYZjhSklrUY2SflPFR_tv8QkarBWkLt-wCoiStJXW6hA4YeoLY-vTwqY_RT-ekVKv3erLc2On68w) and unzip into the project folder.
+
+Alternatively run the `src/scrap.py` script if you want to scrape Wiktionary anew using wikipron:
 
 ```bash
 uv run src/scrape.py # add -l [code] to scrape a particular language
@@ -51,7 +53,7 @@ Where the flags refer to the following actions (each action depends on the previ
 * `-l` or `--languages`: generate language dataframe
 * `-w` or `--words`: generate words dataframe
 * `-s` or `--syllables`: generate words dataframe
-* `-m` or `--model`: run Bayesian models in Stan
+* `-m` or `--model`: run Bayesian models in PyMC
 * `-v` or `--viz`: generate plots
 * `-d` or `--docs`: generate manuscript in Quarto
 
